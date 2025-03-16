@@ -3,43 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Farhad Hossain - Portfolio</title>
+    <title>Hossain - Portfolio</title>
     <style>
         /* Basic CSS Styling */
         body {
-            font-family: sans-serif;
+            font-family: 'Arial', sans-serif;
             margin: 0;
             padding: 0;
             background-color: #f4f4f4;
+            transition: background-color 0.3s ease;
         }
         header {
             background-color: #333;
             color: #fff;
             padding: 1rem;
             text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
         nav {
             background-color: #444;
             color: #fff;
             padding: 0.5rem;
             text-align: center;
+            position: sticky;
+            top: 60px;
+            z-index: 999;
         }
         nav a {
             color: #fff;
             text-decoration: none;
             padding: 0.5rem 1rem;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         nav a:hover {
             background-color: #555;
+            color: #ff0;
         }
         #content {
             padding: 2rem;
+            max-width: 1200px;
+            margin: auto;
         }
         .project {
             margin-bottom: 1rem;
             border: 1px solid #ccc;
             padding: 1rem;
             background-color: #fff;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .project:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         .project h3 {
             margin-top: 0;
@@ -53,12 +69,21 @@
             bottom: 0;
             width: 100%;
         }
+        @media (max-width: 768px) {
+            nav a {
+                display: block;
+                padding: 1rem;
+            }
+            .project {
+                margin-bottom: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Farhad Hossain</h1>
+        <h1>Hossain MD Farhad</h1>
         <p>Full Stack Web Developer</p>
     </header>
 
@@ -74,18 +99,18 @@
 
         <section id="about">
             <h2>About Me</h2>
-            <p>I am a Full Stack Web Developer with 5+ years of working experience in building web applications. [cite: 1] I have experience in Inventory Management applications, E-Commerce applications, Project Monitoring Software, Accounting Applications, and API integration. [cite: 2] I am also have experience in developing voice-enabled flight search tools and interested in NLP, Computer Vision. [cite: 3] I am always looking for new challenges and learning opportunities. [cite: 4]</p>
+            <p>I am a Full Stack Web Developer with 5+ years of working experience in building web applications. I have experience in Inventory Management applications, E-Commerce applications, Project Monitoring Software, Accounting Applications, and API integration. I am also have experience in developing voice-enabled flight search tools and interested in NLP, Computer Vision. I am always looking for new challenges and learning opportunities.</p>
         </section>
 
         <section id="skills">
             <h2>Skills</h2>
             <p>
-                <strong>Languages:</strong> C# (ASP.NET, .NET CORE), SQL, JavaScript, TypeScript, HTML5 [cite: 26] <br>
-                <strong>Databases:</strong> MSSQL SERVER, ORACLE, Microsoft Access [cite: 26] <br>
-                <strong>Web Technologies:</strong> HTML, CSS, JavaScript [cite: 26] <br>
-                <strong>Frameworks:</strong> MVC, Entity Framework, ASP .NET MVC-5 | ASP .NET Core | Web API, Angular | Angular Material [cite: 26] <br>
-                <strong>Tools:</strong> JQUERY, BOOTSTRAP, Visual Studio | Visual Studio Code | GIT | GitHub [cite: 26] <br>
-                 JIRA, HANSOFT [cite: 26]
+                <strong>Languages:</strong> C# (ASP.NET, .NET CORE), SQL, JavaScript, TypeScript, HTML5 <br>
+                <strong>Databases:</strong> MSSQL SERVER, ORACLE, Microsoft Access <br>
+                <strong>Web Technologies:</strong> HTML, CSS, JavaScript <br>
+                <strong>Frameworks:</strong> MVC, Entity Framework, ASP .NET MVC-5 | ASP .NET Core | Web API, Angular | Angular Material <br>
+                <strong>Tools:</strong> JQUERY, BOOTSTRAP, Visual Studio | Visual Studio Code | GIT | GitHub <br>
+                 JIRA, HANSOFT
             </p>
         </section>
 
@@ -96,18 +121,18 @@
                 <h3>Senior Software Engineer (Freelance) , AdvancePro Tecnologies</h3>
                 <p>January, 2023 – Present</p>
                 <ul>
-                    <li>Develop the backend of AdvancePro, an inventory management software product developed by Advance Pro Tech. [cite: 5, 6, 7, 8, 9]</li>
-                    <li>Work closely with the team to understand product requirements, design and implement software solutions that meet these requirements. [cite: 6, 7, 8, 9]</li>
-                     <li>Participate in code reviews to ensure adherence to coding standards and best practices. [cite: 6, 7, 8, 9]</li>
-                    <li>Develop and maintain RESTful APIs to enable communication between different software components. [cite: 6, 7, 8, 9]</li>
-                    <li>Troubleshoot and debug software issues reported by users. [cite: 6, 7, 8, 9]</li>
-                     <li>Ensure software is up-to-date with latest technologies. [cite: 6, 7, 8, 9]</li>
-                    <li>Provide guidance and mentorship to junior developers, fostering a collaborative and learning-oriented environment. [cite: 9]</li>
-                    <li>Optimized backend architecture, resulting in a significant increase in system performance. [cite: 28, 29, 30, 31]</li>
-                    <li>Developed and maintained robust RESTful APIs, enabling seamless integration with other platforms such as Shopify, Amazon Seller and many more. [cite: 28, 29, 30, 31]</li>
-                    <li>Encountered significant backend latency and response time issues that affected system performance and user experience [cite: 30, 31]</li>
-                    <li>Conducted thorough performance analysis and refactored the backend architecture to reduce latency and improve response times. [cite: 30, 31]</li>
-                    <li>Implemented efficient database queries and optimized API endpoints. [cite: 30, 31]</li>
+                    <li>Develop the backend of AdvancePro, an inventory management software product developed by Advance Pro Tech.</li>
+                    <li>Work closely with the team to understand product requirements, design and implement software solutions that meet these requirements.</li>
+                     <li>Participate in code reviews to ensure adherence to coding standards and best practices.</li>
+                    <li>Develop and maintain RESTful APIs to enable communication between different software components.</li>
+                    <li>Troubleshoot and debug software issues reported by users.</li>
+                     <li>Ensure software is up-to-date with latest technologies.</li>
+                    <li>Provide guidance and mentorship to junior developers, fostering a collaborative and learning-oriented environment.</li>
+                    <li>Optimized backend architecture, resulting in a significant increase in system performance.</li>
+                    <li>Developed and maintained robust RESTful APIs, enabling seamless integration with other platforms such as Shopify, Amazon Seller and many more.</li>
+                    <li>Encountered significant backend latency and response time issues that affected system performance and user experience.</li>
+                    <li>Conducted thorough performance analysis and refactored the backend architecture to reduce latency and improve response times.</li>
+                    <li>Implemented efficient database queries and optimized API endpoints.</li>
 
                 </ul>
             </div>
@@ -116,17 +141,17 @@
                 <h3>Senior .NET Programmer , MobilityOne Sdn Bhd</h3>
                 <p>December, 2022 – August, 2024</p>
                 <ul>
-                    <li>Develop high-quality software design and architecture. [cite: 10, 11, 12, 13]</li>
-                    <li>Identify, prioritize and execute tasks in the software development life cycle. [cite: 10, 11, 12, 13]</li>
-                    <li>Develop tools and applications by producing clean, efficient code. [cite: 10, 11, 12, 13]</li>
-                    <li>Automate tasks through appropriate tools and scripting. [cite: 12, 33, 35]</li>
-                    <li>Review and debug code. [cite: 12]</li>
-                    <li>Perform validation and verification testing. [cite: 12]</li>
-                     <li>Collaborate with internal teams and vendors to fix and improve products. [cite: 13]</li>
-                    <li>Ensure software is up-to-date with latest technologies. [cite: 13]</li>
-                    <li>Developed and maintained robust RESTful APIs for an automated biller system, optimizing pending transactions by more than 90%. [cite: 33]</li>
-                    <li>Faced difficulties integrating various payment platforms, which caused transaction delays and inconsistencies for municipal utilities. [cite: 34, 35]</li>
-                    <li>Automated critical tasks through schedulers, enhancing efficiency and reducing manual errors. This led to smoother transactions and improved user satisfaction. [cite: 34, 35]</li>
+                    <li>Develop high-quality software design and architecture.</li>
+                    <li>Identify, prioritize and execute tasks in the software development life cycle.</li>
+                    <li>Develop tools and applications by producing clean, efficient code.</li>
+                    <li>Automate tasks through appropriate tools and scripting.</li>
+                    <li>Review and debug code.</li>
+                    <li>Perform validation and verification testing.</li>
+                     <li>Collaborate with internal teams and vendors to fix and improve products.</li>
+                    <li>Ensure software is up-to-date with latest technologies.</li>
+                    <li>Developed and maintained robust RESTful APIs for an automated biller system, optimizing pending transactions by more than 90%.</li>
+                    <li>Faced difficulties integrating various payment platforms, which caused transaction delays and inconsistencies for municipal utilities.</li>
+                    <li>Automated critical tasks through schedulers, enhancing efficiency and reducing manual errors. This led to smoother transactions and improved user satisfaction.</li>
                 </ul>
             </div>
 
@@ -134,15 +159,15 @@
                 <h3>Software Engineer , Prime Tech Solution Limited</h3>
                 <p>March, 2018 – December, 2022</p>
                 <ul>
-                    <li>Write well-designed, testable code. [cite: 14, 15, 16, 17]</li>
-                    <li>Integrate software components into a fully functional software system. [cite: 15, 37, 38, 39]</li>
-                    <li>Deploy programs and evaluate user feedback. [cite: 15, 37, 38, 39]</li>
-                    <li>Execute full software development life cycle (SDLC). [cite: 16]</li>
-                    <li>Document and maintain software functionality. [cite: 16]</li>
-                    <li>Troubleshoot, debug and upgrade existing systems. [cite: 16]</li>
-                    <li>Developed and managed backend APIs for a .NET Core & Angular-based e-commerce web application using Clean Architecture, improving response times and system performance [cite: 38]</li>
-                    <li>Struggled with real-time data synchronization for the Distribution Management System, leading to data inconsistencies and inefficiencies. [cite: 39]</li>
-                    <li>Implemented real-time data synchronization using SignalR, which greatly improved data consistency and system efficiency. [cite: 39]</li>
+                    <li>Write well-designed, testable code.</li>
+                    <li>Integrate software components into a fully functional software system.</li>
+                    <li>Deploy programs and evaluate user feedback.</li>
+                    <li>Execute full software development life cycle (SDLC).</li>
+                    <li>Document and maintain software functionality.</li>
+                    <li>Troubleshoot, debug and upgrade existing systems.</li>
+                    <li>Developed and managed backend APIs for a .NET Core & Angular-based e-commerce web application using Clean Architecture, improving response times and system performance.</li>
+                    <li>Struggled with real-time data synchronization for the Distribution Management System, leading to data inconsistencies and inefficiencies.</li>
+                    <li>Implemented real-time data synchronization using SignalR, which greatly improved data consistency and system efficiency.</li>
                 </ul>
             </div>
         </section>
@@ -151,28 +176,28 @@
             <h2>Projects</h2>
             <div class="project">
                 <h3>AdvancePro</h3>
-                <p>AdvancePro is an inventory management solution. [cite: 18] It provides enterprise-level functionality at a fraction of the cost of similar solutions like SAP and NetSuite. [cite: 18] It also integrates with QuickBooks and other platforms through a REST API. [cite: 18] Successfully optimized the backend architecture, resulting in a significant in system performance. [cite: 18] Led code review sessions, significantly improving code quality and reducing bugs. [cite: 18]</p>
-                <p><strong>Technologies:</strong> C# (.NET Core) RESTAPI MSSQL Entity Framework Core Integration MVC n-tier Architecture [cite: 18]</p>
+                <p>AdvancePro is an inventory management solution. It provides enterprise-level functionality at a fraction of the cost of similar solutions like SAP and NetSuite. It also integrates with QuickBooks and other platforms through a REST API. Successfully optimized the backend architecture, resulting in a significant in system performance. Led code review sessions, significantly improving code quality and reducing bugs.</p>
+                <p><strong>Technologies:</strong> C# (.NET Core) RESTAPI MSSQL Entity Framework Core Integration MVC n-tier Architecture</p>
             </div>
              <div class="project">
                 <h3>Ebilling System</h3>
-                <p>Ebilling system is an automated biller system for various municipal in Malaysia through which citizen of those municipal can pay there utility bill. [cite: 18] Developed and maintained robust RESTful APIs, enabling seamless integration with various platforms. [cite: 18] Optimized pending transactions by 90%. [cite: 18]</p>
-                <p><strong>Technologies:</strong> C# (.NET Core) WEB API MSSQL ORACLE 11g API Integration [cite: 18]</p>
+                <p>Ebilling system is an automated biller system for various municipal in Malaysia through which citizen of those municipal can pay there utility bill. Developed and maintained robust RESTful APIs, enabling seamless integration with various platforms. Optimized pending transactions by 90%.</p>
+                <p><strong>Technologies:</strong> C# (.NET Core) WEB API MSSQL ORACLE 11g API Integration</p>
             </div>
              <div class="project">
                 <h3>Banglalink Distribution Management System (DMS)</h3>
-                <p>A web-based Distribution Management System that helps to manage supply chain and logistics activities. [cite: 18] This includes warehouse inventory management among Distributor, RSO, Retailer and related entities.  [cite: 18] Improved system efficiency by implementing real-time data synchronization using SignalR. [cite: 18]</p>
-                <p><strong>Technologies:</strong> C# (Asp.NET) Web Application MVC Entity Framework Oracle 11g SignalR n-tier Architecture [cite: 18]</p>
+                <p>A web-based Distribution Management System that helps to manage supply chain and logistics activities. This includes warehouse inventory management among Distributor, RSO, Retailer and related entities. Improved system efficiency by implementing real-time data synchronization using SignalR.</p>
+                <p><strong>Technologies:</strong> C# (Asp.NET) Web Application MVC Entity Framework Oracle 11g SignalR n-tier Architecture</p>
             </div>
             <div class="project">
                 <h3>Important Rural Infrastructure Development Project-2 (IRIDP-2)</h3>
-                <p>Monitors payment log, development of Road & Bridge/Culvert throughout the country. [cite: 18] Successfully integrated multiple APIs to streamline data flow and improve system interoperability. [cite: 18] Implemented dynamic user roles, enhancing security and access control across the application. [cite: 18]</p>
-                <p><strong>Technologies:</strong> C# (Asp.NET) Web Application MVC Entity Framework MSSQL Two-tier architecture Repository Pattern [cite: 18]</p>
+                <p>Monitors payment log, development of Road & Bridge/Culvert throughout the country. Successfully integrated multiple APIs to streamline data flow and improve system interoperability. Implemented dynamic user roles, enhancing security and access control across the application.</p>
+                <p><strong>Technologies:</strong> C# (Asp.NET) Web Application MVC Entity Framework MSSQL Two-tier architecture Repository Pattern</p>
             </div>
             <div class="project">
                 <h3>AARMOIRE</h3>
-                <p>.NET Core & Angular based e-Commerce Web Application. [cite: 18] Inventory, Sales, E-Shop, Admin, Customer, Loyalty Module Management and Report. [cite: 18] Backend managed completely through .Net core-based API using Clean Architecture whereas UI is designed through Angular. [cite: 18]</p>
-                <p><strong>Technologies:</strong> C# (Asp.NET) Web API MVC Entity Framework MSSQL Clean Architecture [cite: 18]</p>
+                <p>.NET Core & Angular based e-Commerce Web Application. Inventory, Sales, E-Shop, Admin, Customer, Loyalty Module Management and Report. Backend managed completely through .Net core-based API using Clean Architecture whereas UI is designed through Angular.</p>
+                <p><strong>Technologies:</strong> C# (Asp.NET) Web API MVC Entity Framework MSSQL Clean Architecture</p>
             </div>
         </section>
 
@@ -181,7 +206,7 @@
             <p>Email: hssnmd.farhad@gmail.com</p>
             <p>Mobile: +358402467814</p>
             <p>Git: <a href="https://github.com/HMFarhad" target="_blank">https://github.com/HMFarhad</a></p>
-            <p>Location: Helsinki, 00700</p> [cite: 1]
+            <p>Location: Helsinki, 00700</p>
         </section>
 
     </div>
