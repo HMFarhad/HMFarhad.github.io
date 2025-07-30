@@ -45,14 +45,14 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 2rem;
+  gap: 1.2rem;
 
   .nav-item {
     .nav-link {
       text-decoration: none;
       color: #2c3e50;
       font-weight: 500;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 0.7rem;
       border-radius: 25px;
       transition: all 0.3s ease;
       position: relative;
