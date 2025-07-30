@@ -1,0 +1,382 @@
+.experience {
+  padding: 80px 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  position: relative;
+}
+
+.experience-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 3rem;
+
+  .section-title {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .section-subtitle {
+    font-size: 1.1rem;
+    color: #7f8c8d;
+    font-weight: 300;
+  }
+}
+
+.timeline {
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    transform: translateX(-50%);
+    border-radius: 2px;
+  }
+}
+
+.timeline-item {
+  position: relative;
+  width: 50%;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+
+  &.left {
+    left: 0;
+    padding-right: 3rem;
+
+    .timeline-content {
+      text-align: right;
+      border-radius: 20px 5px 20px 20px;
+    }
+
+    .timeline-marker {
+      right: -25px;
+    }
+  }
+
+  &.right {
+    left: 50%;
+    padding-left: 3rem;
+
+    .timeline-content {
+      text-align: left;
+      border-radius: 5px 20px 20px 20px;
+    }
+
+    .timeline-marker {
+      left: -25px;
+    }
+  }
+}
+
+.timeline-content {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    width: 0;
+    height: 0;
+    border: 15px solid transparent;
+  }
+
+  .left &::before {
+    right: -30px;
+    border-left-color: rgba(255, 255, 255, 0.9);
+  }
+
+  .right &::before {
+    left: -30px;
+    border-right-color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+.timeline-header {
+  margin-bottom: 1rem;
+
+  .position {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+  }
+
+  .company {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 0.3rem;
+  }
+
+  .duration {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    font-weight: 500;
+    padding: 0.25rem 0.8rem;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 20px;
+    display: inline-block;
+  }
+}
+
+.timeline-body {
+  .description {
+    font-size: 0.95rem;
+    color: #5a6c7d;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+  }
+
+  .achievements {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 1rem;
+
+    li {
+      position: relative;
+      padding: 0.3rem 0;
+      padding-left: 1.2rem;
+      font-size: 0.9rem;
+      color: #5a6c7d;
+      line-height: 1.4;
+
+      &::before {
+        content: '▶';
+        position: absolute;
+        left: 0;
+        color: #667eea;
+        font-size: 0.7rem;
+      }
+    }
+  }
+
+  .challenges-improvements {
+    margin-bottom: 1rem;
+
+    .challenge-solution {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+
+      .challenge-item, .solution-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        line-height: 1.4;
+
+        i {
+          font-size: 0.8rem;
+          margin-top: 0.1rem;
+          flex-shrink: 0;
+        }
+
+        span {
+          flex: 1;
+        }
+      }
+
+      .challenge-item {
+        background: rgba(255, 193, 7, 0.1);
+        border-left: 3px solid #ffc107;
+
+        i {
+          color: #ffc107;
+        }
+
+        span {
+          color: #856404;
+        }
+      }
+
+      .solution-item {
+        background: rgba(40, 167, 69, 0.1);
+        border-left: 3px solid #28a745;
+
+        i {
+          color: #28a745;
+        }
+
+        span {
+          color: #155724;
+        }
+      }
+    }
+  }
+
+  .technologies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+
+    .tech-tag {
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 0.4rem 0.8rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 15px;
+      transition: transform 0.2s ease;
+
+      &:hover {
+        transform: scale(1.05);
+      }
+    }
+  }
+}
+
+.timeline-marker {
+  position: absolute;
+  top: 2rem;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+  z-index: 10;
+
+  .marker-icon {
+    color: white;
+    font-size: 1.2rem;
+  }
+}
+
+// Mobile responsive
+@media screen and (max-width: 768px) {
+  .experience {
+    padding: 60px 0;
+  }
+
+  .section-header {
+    margin-bottom: 2rem;
+
+    .section-title {
+      font-size: 2.2rem;
+    }
+
+    .section-subtitle {
+      font-size: 1rem;
+    }
+  }
+
+  .timeline {
+    &::before {
+      left: 25px;
+    }
+  }
+
+  .timeline-item {
+    width: 100%;
+    left: 0 !important;
+    padding: 1rem;
+    padding-left: 4rem;
+
+    &.left, &.right {
+      .timeline-content {
+        text-align: left;
+        border-radius: 5px 20px 20px 20px;
+
+        &::before {
+          left: -30px;
+          right: auto;
+          border-right-color: rgba(255, 255, 255, 0.9);
+          border-left-color: transparent;
+        }
+      }
+
+      .timeline-marker {
+        left: 0;
+        right: auto;
+      }
+    }
+  }
+
+  .timeline-content {
+    padding: 1.5rem;
+
+    .timeline-header {
+      .position {
+        font-size: 1.2rem;
+      }
+
+      .company {
+        font-size: 1rem;
+      }
+
+      .duration {
+        font-size: 0.85rem;
+      }
+    }
+
+    .timeline-body {
+      .description {
+        font-size: 0.95rem;
+      }
+
+      .achievements {
+        li {
+          font-size: 0.9rem;
+        }
+      }
+
+      .challenges-improvements {
+        .challenge, .improvement {
+          h5 {
+            font-size: 0.85rem;
+          }
+
+          p {
+            font-size: 0.8rem;
+          }
+        }
+      }
+
+      .technologies {
+        .tech-tag {
+          font-size: 0.75rem;
+          padding: 0.3rem 0.6rem;
+        }
+      }
+    }
+  }
+
+  .timeline-marker {
+    width: 40px;
+    height: 40px;
+
+    .marker-icon {
+      font-size: 1rem;
+    }
+  }
+}

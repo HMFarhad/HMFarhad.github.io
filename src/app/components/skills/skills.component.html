@@ -1,0 +1,56 @@
+<section id="skills" class="skills">
+  <div class="skills-container">
+    <div class="section-header">
+      <h2 class="section-title">Professional Work as</h2>
+      <p class="section-subtitle">Technologies and frameworks I excel in</p>
+    </div>
+    
+    <div class="spinning-skills">
+      <div class="skills-orbit">
+        <!-- Central hub -->
+        <div class="skills-hub">
+          <div class="hub-content">
+            <h3>Full Stack</h3>
+            <p>Developer</p>
+          </div>
+        </div>
+        
+        <!-- Skill items orbiting around the center -->
+        <div class="skill-item" 
+             *ngFor="let skill of skills; let i = index"
+             [style.animation-delay]="getAnimationDelay(i)"
+             [class]="'skill-' + (i + 1)">
+          <div class="skill-content" [style.background]="skill.color">
+            <div class="skill-icon">
+              <i [class]="skill.icon"></i>
+            </div>
+            <div class="skill-text">
+              <span class="skill-name">{{ skill.name }}</span>
+              <span class="skill-level">{{ skill.experience }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Additional floating elements -->
+      <div class="floating-tech">
+        <div class="tech-bubble" *ngFor="let tech of floatingTech; let i = index"
+             [style.animation-delay]="i * 0.5 + 's'">
+          {{ tech }}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Skills breakdown -->
+    <div class="skills-breakdown">
+      <div class="skill-category" *ngFor="let category of skillCategories">
+        <h4 class="category-title">{{ category.title }}</h4>
+        <div class="category-skills">
+          <span class="skill-tag" *ngFor="let skill of category.skills">
+            {{ skill }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

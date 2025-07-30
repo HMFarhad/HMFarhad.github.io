@@ -1,0 +1,88 @@
+<section id="blog" class="blog">
+  <div class="blog-container">
+    <div class="section-header">
+      <h2 class="section-title">Blog & Articles</h2>
+      <p class="section-subtitle">Sharing knowledge and insights from my development journey</p>
+    </div>
+
+    <!-- Blog Posts Grid -->
+    <div class="blog-grid">
+      <article 
+        *ngFor="let post of blogPosts" 
+        class="blog-card"
+        [class.featured]="post.featured">
+        
+        <div class="blog-header">
+          <div class="blog-meta">
+            <span class="publish-date">{{ post.publishDate }}</span>
+            <span class="read-time">{{ post.readTime }}</span>
+          </div>
+          <div class="featured-badge" *ngIf="post.featured">Featured</div>
+        </div>
+
+        <div class="blog-content">
+          <h3 class="blog-title">{{ post.title }}</h3>
+          <p class="blog-excerpt">{{ post.excerpt }}</p>
+          
+          <div class="blog-tags">
+            <span *ngFor="let tag of post.tags" class="tag">{{ tag }}</span>
+          </div>
+
+          <div class="blog-actions">
+            <button class="btn-read-more" (click)="openPost(post)">
+              <i class="fas fa-book-open"></i>
+              <span>Read More</span>
+            </button>
+            <button class="btn-medium" (click)="openMediumPost(post.mediumUrl)">
+              <i class="fab fa-medium"></i>
+              <span>View on Medium</span>
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <!-- Modal Popup for Full Post -->
+  <div class="modal-overlay" *ngIf="showFullPost" (click)="closePost()">
+    <div class="modal-content" (click)="$event.stopPropagation()" *ngIf="selectedPost">
+      <div class="modal-header">
+        <h1 class="modal-title">{{ selectedPost.title }}</h1>
+        <button class="btn-close" (click)="closePost()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="post-meta">
+          <div class="post-info">
+            <span class="publish-date">{{ selectedPost.publishDate }}</span>
+            <span class="read-time">{{ selectedPost.readTime }}</span>
+            <a [href]="selectedPost.mediumUrl" target="_blank" class="medium-link">
+              <i class="fab fa-medium"></i>
+              <span>Read on Medium</span>
+            </a>
+          </div>
+          <div class="post-tags">
+            <span *ngFor="let tag of selectedPost.tags" class="tag">{{ tag }}</span>
+          </div>
+        </div>
+
+        <div class="post-content">
+          <div class="content-wrapper" [innerHTML]="selectedPost.content | slice:0:2000"></div>
+          
+          <div class="content-footer">
+            <p class="read-full-note">
+              <i class="fas fa-info-circle"></i>
+              This is an excerpt. Read the full article on Medium for the complete experience.
+            </p>
+            <a [href]="selectedPost.mediumUrl" target="_blank" class="btn-read-full">
+              <i class="fab fa-medium"></i>
+              <span>Read Full Article on Medium</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

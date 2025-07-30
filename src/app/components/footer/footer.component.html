@@ -1,0 +1,72 @@
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <h3 class="brand-name">Hossain MD Farhad</h3>
+        <p class="brand-tagline">Full Stack Web Developer</p>
+        <p class="brand-description">
+          Building exceptional digital experiences with modern technologies and innovative solutions.
+        </p>
+      </div>
+      
+      <div class="footer-links">
+        <div class="link-group">
+          <h4>Navigation</h4>
+          <ul>
+            <li><a href="#home" (click)="scrollToSection('home')">Home</a></li>
+            <li><a href="#about" (click)="scrollToSection('about')">About</a></li>
+            <li><a href="#skills" (click)="scrollToSection('skills')">Skills</a></li>
+            <li><a href="#experience" (click)="scrollToSection('experience')">Experience</a></li>
+            <li><a href="#education" (click)="scrollToSection('education')">Education</a></li>
+            <li><a href="#contact" (click)="scrollToSection('contact')">Contact</a></li>
+          </ul>
+        </div>
+        
+        <div class="link-group">
+          <h4>Technologies</h4>
+          <ul>
+            <li><span>C# & .NET Core</span></li>
+            <li><span>Angular & TypeScript</span></li>
+            <li><span>SQL Server & Oracle</span></li>
+            <li><span>RESTful APIs</span></li>
+            <li><span>Entity Framework</span></li>
+          </ul>
+        </div>
+        
+        <div class="link-group">
+          <h4>Connect</h4>
+          <div class="social-links">
+            <a href="https://github.com/HMFarhad/" target="_blank" class="social-link">
+              <i class="fab fa-github"></i>
+              <span>GitHub</span>
+            </a>
+            <a href="https://www.linkedin.com/in/hmfarhad/" target="_blank" class="social-link">
+              <i class="fab fa-linkedin"></i>
+              <span>LinkedIn</span>
+            </a>
+            <a href="mailto:hssnmd.farhad&#64;gmail.com" class="social-link">
+              <i class="fas fa-envelope"></i>
+              <span>Email</span>
+            </a>
+            <a href="tel:+358402467814" class="social-link">
+              <i class="fas fa-phone"></i>
+              <span>Phone</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer-bottom">
+      <div class="footer-divider"></div>
+      <div class="footer-bottom-content">
+        <p class="copyright">
+          © {{ currentYear }} Hossain MD Farhad. All rights reserved.
+        </p>
+        <p class="built-with">
+          Built with <i class="fas fa-heart"></i> using Angular & TypeScript
+        </p>
+      </div>
+    </div>
+  </div>
+</footer>

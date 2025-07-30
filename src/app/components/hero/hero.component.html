@@ -1,0 +1,55 @@
+<section id="home" class="hero">
+  <div class="hero-container">
+    <div class="hero-content">
+      <div class="hero-text">
+        <h1 class="hero-title">
+          Hi, I'm <span class="gradient-text">Hossain MD Farhad</span>
+        </h1>
+        <h2 class="hero-subtitle">Full Stack Web Developer | Software Engineer</h2>
+        <p class="hero-description">
+          Recent MS graduate with 5+ years of expertise in modern web technologies, actively seeking new challenges and opportunities.
+          Passionate about creating efficient, scalable solutions that drive innovation and business growth.
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" (click)="scrollToSection('contact')">
+            Let's Connect
+          </button>
+          <button class="btn btn-secondary" (click)="downloadResume()">
+            View Resume
+          </button>
+        </div>
+        <div class="hero-social">
+          <a href="https://github.com/HMFarhad/" target="_blank" class="social-link">
+            <i class="fab fa-github"></i>
+          </a>
+          <a href="https://www.linkedin.com/in/hmfarhad/" target="_blank" class="social-link">
+            <i class="fab fa-linkedin"></i>
+          </a>
+          <a href="mailto:hssnmd.farhad@gmail.com" class="social-link">
+            <i class="fas fa-envelope"></i>
+          </a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="profile-card">
+          <div class="profile-image">
+            <img src="/assets/images/profile.jpg" alt="Hossain MD Farhad" class="profile-img" 
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+            <div class="image-placeholder" style="display: none;">
+              <i class="fas fa-user"></i>
+            </div>
+          </div>
+          <div class="floating-elements">
+            <div class="floating-element element-1">C#</div>
+            <div class="floating-element element-2">Web Technologies</div>
+            <div class="floating-element element-3">.NET</div>
+            <div class="floating-element element-4">SQL</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-indicator">
+      <div class="scroll-arrow"></div>
+    </div>
+  </div>
+</section>

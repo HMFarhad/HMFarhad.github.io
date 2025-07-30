@@ -1,0 +1,52 @@
+<section id="experience" class="experience">
+  <div class="experience-container">
+    <div class="section-header">
+      <h2 class="section-title">Professional Experience</h2>
+      <p class="section-subtitle">My journey in software development and the impact I've made</p>
+    </div>
+    
+    <div class="timeline">
+      <div class="timeline-item" *ngFor="let exp of experiences; let i = index" [class.left]="i % 2 === 0" [class.right]="i % 2 === 1">
+        <div class="timeline-content">
+          <div class="timeline-header">
+            <h3 class="position">{{ exp.position }}</h3>
+            <div class="company">{{ exp.company }}</div>
+            <div class="duration">{{ exp.duration }}</div>
+          </div>
+          
+          <div class="timeline-body">
+            <p class="description">{{ exp.description }}</p>
+            
+            <ul class="achievements">
+              <li *ngFor="let achievement of exp.achievements">{{ achievement }}</li>
+            </ul>
+            
+            <div class="challenges-improvements" *ngIf="exp.challenges || exp.improvements">
+              <div class="challenge-solution">
+                <div class="challenge-item" *ngIf="exp.challenges">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <span>{{ exp.challenges }}</span>
+                </div>
+                
+                <div class="solution-item" *ngIf="exp.improvements">
+                  <i class="fas fa-lightbulb"></i>
+                  <span>{{ exp.improvements }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="technologies">
+              <span class="tech-tag" *ngFor="let tech of exp.technologies">{{ tech }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="timeline-marker">
+          <div class="marker-icon">
+            <i [class]="exp.icon"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

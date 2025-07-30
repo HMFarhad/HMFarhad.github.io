@@ -1,0 +1,63 @@
+<section id="projects" class="projects">
+  <div class="projects-container">
+    <div class="section-header">
+      <h2 class="section-title">Projects & Research</h2>
+      <p class="section-subtitle">Innovative solutions and research contributions in various domains</p>
+    </div>
+
+    <!-- Category Filter -->
+    <div class="filter-tabs">
+      <button 
+        *ngFor="let category of categories" 
+        class="filter-btn"
+        [class.active]="selectedCategory === category"
+        (click)="filterProjects(category)">
+        {{ category }}
+      </button>
+    </div>
+
+    <!-- Projects Grid -->
+    <div class="projects-grid">
+      <div 
+        *ngFor="let project of filteredProjects" 
+        class="project-card"
+        [class.featured]="project.featured">
+        
+        <!-- Project Image Placeholder - You can add images later -->
+        <div class="project-image">
+          <div class="image-placeholder">
+            <i class="fas fa-code" *ngIf="project.category === 'Game Development' || project.category === 'Computer Vision'"></i>
+            <i class="fas fa-brain" *ngIf="project.category === 'Artificial Intelligence'"></i>
+            <i class="fas fa-microchip" *ngIf="project.category === 'Hardware Design'"></i>
+            <i class="fas fa-search" *ngIf="project.category === 'Research'"></i>
+            <i class="fas fa-globe" *ngIf="project.category === 'Web Development'"></i>
+          </div>
+          <div class="project-category">{{ project.category }}</div>
+        </div>
+
+        <!-- Project Content -->
+        <div class="project-content">
+          <h3 class="project-title">{{ project.title }}</h3>
+          <p class="project-description">{{ project.description }}</p>
+          
+          <!-- Technologies -->
+          <div class="project-technologies">
+            <span *ngFor="let tech of project.technologies" class="tech-tag">{{ tech }}</span>
+          </div>
+
+          <!-- Project Links -->
+          <div class="project-links">
+            <a *ngIf="project.github" [href]="project.github" target="_blank" class="project-link github">
+              <i class="fab fa-github"></i>
+              <span>GitHub</span>
+            </a>
+            <a *ngIf="project.link" [href]="project.link" target="_blank" class="project-link demo">
+              <i class="fas fa-external-link-alt"></i>
+              <span>View Paper</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

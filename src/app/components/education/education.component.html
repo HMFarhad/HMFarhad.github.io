@@ -1,0 +1,74 @@
+<section id="education" class="education">
+  <div class="education-container">
+    <div class="section-header">
+      <h2 class="section-title">Education</h2>
+      <p class="section-subtitle">Academic foundation building my expertise</p>
+    </div>
+    
+    <div class="education-grid">
+      <div class="education-card" *ngFor="let edu of educations">
+        <div class="card-header">
+          <div class="degree-icon">
+            <i [class]="edu.icon"></i>
+          </div>
+          <div class="degree-info">
+            <h3 class="degree-title">{{ edu.degree }}</h3>
+            <div class="field">{{ edu.field }}</div>
+            <div class="year">{{ edu.year }}</div>
+          </div>
+        </div>
+        
+        <div class="card-body">
+          <div class="institution">
+            <i class="fas fa-university"></i>
+            <span>{{ edu.institution }}</span>
+          </div>
+          
+          <div class="location" *ngIf="edu.location">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>{{ edu.location }}</span>
+          </div>
+          
+          <div class="description" *ngIf="edu.description">
+            <p>{{ edu.description }}</p>
+          </div>
+          
+          <div class="highlights" *ngIf="edu.highlights && edu.highlights.length > 0">
+            <h4>Key Highlights:</h4>
+            <ul>
+              <li *ngFor="let highlight of edu.highlights">{{ highlight }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="language-skills">
+      <div class="section-header">
+        <h3 class="section-title">Language Proficiency</h3>
+      </div>
+      
+      <div class="language-grid">
+        <div class="language-item" *ngFor="let lang of languages">
+          <div class="language-info">
+            <div class="language-flag">
+              <i [class]="lang.flag"></i>
+            </div>
+            <div class="language-details">
+              <h4 class="language-name">{{ lang.name }}</h4>
+              <div class="proficiency">{{ lang.level }}</div>
+            </div>
+          </div>
+          
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width]="lang.percentage + '%'"></div>
+          </div>
+          
+          <div class="additional-info" *ngIf="lang.certification">
+            <span class="certification">{{ lang.certification }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

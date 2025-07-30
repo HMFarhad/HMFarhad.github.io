@@ -1,0 +1,42 @@
+<header class="header" [class.scrolled]="isScrolled">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <a href="#home" class="brand-link">
+        <span class="brand-text">Hossain MD Farhad</span>
+      </a>
+    </div>
+    
+    <ul class="nav-menu" [class.active]="isMenuOpen">
+      <li class="nav-item">
+        <a href="#home" class="nav-link" (click)="scrollToSection('home')">Home</a>
+      </li>
+      <li class="nav-item">
+        <a href="#about" class="nav-link" (click)="scrollToSection('about')">About</a>
+      </li>
+      <li class="nav-item">
+        <a href="#skills" class="nav-link" (click)="scrollToSection('skills')">Skills</a>
+      </li>
+      <li class="nav-item">
+        <a href="#projects" class="nav-link" (click)="scrollToSection('projects')">Projects</a>
+      </li>
+      <li class="nav-item">
+        <a href="#blog" class="nav-link" (click)="scrollToSection('blog')">Blog</a>
+      </li>
+      <li class="nav-item">
+        <a href="#experience" class="nav-link" (click)="scrollToSection('experience')">Experience</a>
+      </li>
+      <li class="nav-item">
+        <a href="#education" class="nav-link" (click)="scrollToSection('education')">Education</a>
+      </li>
+      <li class="nav-item">
+        <a href="#contact" class="nav-link" (click)="scrollToSection('contact')">Contact</a>
+      </li>
+    </ul>
+    
+    <div class="nav-toggle" (click)="toggleMenu()">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </div>
+  </nav>
+</header>
