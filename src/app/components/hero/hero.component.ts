@@ -20,7 +20,7 @@ export class HeroComponent {
     // Download the PDF resume from assets folder
     const link = document.createElement('a');
     link.href = '/assets/documents/Hossain_MD_Farhad_Resume.pdf';
-    link.download = 'Hossain_MD_Farhad_Resume.pdf';
+    link.download = 'HossainMD_Farhad_Resume.pdf';
     link.target = '_blank'; // Opens in new tab if PDF viewer is available
     document.body.appendChild(link);
     link.click();

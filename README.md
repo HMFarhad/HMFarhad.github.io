@@ -114,17 +114,42 @@ Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.
 
 ## 📦 Build & Deployment
 
+### GitHub Pages Deployment
+
+This project is configured for GitHub Pages deployment:
+
 1. **Production Build**
    ```bash
    ng build --configuration production
    ```
 
-2. **Static Hosting** - Can be deployed to:
-   - GitHub Pages
+2. **Copy build files to root** (for GitHub Pages)
+   ```bash
+   # Windows PowerShell
+   Copy-Item -Path "dist\portfolio-website\browser\*" -Destination "." -Recurse -Force
+   
+   # Linux/Mac
+   cp -r dist/portfolio-website/browser/* .
+   ```
+
+3. **Deploy to GitHub Pages**
+   ```bash
+   git add .
+   git commit -m "Deploy Angular portfolio to GitHub Pages"
+   git push origin main
+   ```
+
+4. **Alternative: Static Hosting** - Can also be deployed to:
    - Netlify
    - Vercel
    - Firebase Hosting
    - Any static hosting service
+
+### Important Notes
+
+- The `angular.json` file has been configured with increased CSS budgets for the portfolio components
+- Build artifacts are copied to the root directory for GitHub Pages compatibility
+- The site will be available at `https://hmfarhad.github.io/` after deployment
 
 ## 🤝 Contributing
 
