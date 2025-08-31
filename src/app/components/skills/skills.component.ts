@@ -24,7 +24,7 @@ export class SkillsComponent implements OnInit {
   skills: Skill[] = [
     {
       name: 'C#',
-      experience: '5+ Years',
+      experience: '6+ Years',
       icon: 'fab fa-microsoft',
       color: 'linear-gradient(135deg, #239B56, #512DA8)'
     },
@@ -36,25 +36,25 @@ export class SkillsComponent implements OnInit {
     },
     {
       name: '.NET Core',
-      experience: '5+ Years',
+      experience: '6+ Years',
       icon: 'fas fa-code',
       color: 'linear-gradient(135deg, #512DA8, #303F9F)'
     },
     {
       name: 'SQL Server',
-      experience: '5+ Years',
+      experience: '6+ Years',
       icon: 'fas fa-database',
       color: 'linear-gradient(135deg, #1976D2, #0288D1)'
     },
     {
       name: 'JavaScript',
-      experience: '5+ Years',
+      experience: '6+ Years',
       icon: 'fab fa-js-square',
       color: 'linear-gradient(135deg, #F57F17, #FF8F00)'
     },
     {
       name: 'RESTful APIs',
-      experience: '5+ Years',
+      experience: '6+ Years',
       icon: 'fas fa-exchange-alt',
       color: 'linear-gradient(135deg, #388E3C, #689F38)'
     }

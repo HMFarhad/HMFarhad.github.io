@@ -52,7 +52,9 @@
         <div class="language-item" *ngFor="let lang of languages">
           <div class="language-info">
             <div class="language-flag">
-              <i [class]="lang.flag"></i>
+              <img [src]="lang.flag" [alt]="lang.name + ' flag'" class="flag-image" 
+                   onerror="this.style.display='none'; this.nextElementSibling.style.display='inline'">
+              <span class="flag-fallback" style="display: none;">{{ lang.name.charAt(0) }}</span>
             </div>
             <div class="language-details">
               <h4 class="language-name">{{ lang.name }}</h4>

@@ -10,7 +10,6 @@ import { ExperienceComponent } from './components/experience/experience.componen
 import { EducationComponent } from './components/education/education.component';
 import { ContactComponent } from './components/contact/contact.component';
 import { FooterComponent } from './components/footer/footer.component';
-import { ChatbotComponent } from './components/chatbot/chatbot.component';
 
 @Component({
   selector: 'app-root',
@@ -26,8 +25,7 @@ import { ChatbotComponent } from './components/chatbot/chatbot.component';
     ExperienceComponent,
     EducationComponent,
     ContactComponent,
-    FooterComponent,
-    ChatbotComponent
+    FooterComponent
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'

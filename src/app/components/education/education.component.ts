@@ -78,23 +78,29 @@ export class EducationComponent {
 
   languages: Language[] = [
     {
+      name: 'English',
+      level: 'Advanced',
+      percentage: 80,
+      certification: 'TOEFL: 96/120',
+      flag: '/assets/images/flags/united-states.svg'
+    },
+    {
       name: 'Bengali',
       level: 'Native',
       percentage: 100,
-      flag: 'fas fa-globe-asia'
+      flag: '/assets/images/flags/bangladesh.svg'
     },
     {
-      name: 'English',
-      level: 'Advanced',
-      percentage: 96,
-      certification: 'TOEFL: 80/120',
-      flag: 'fas fa-globe'
+      name: 'Finnish',
+      level: 'Actively Learning',
+      percentage: 10,
+      flag: '/assets/images/flags/finland.svg'
     },
     {
       name: 'Hindi',
       level: 'Conversational',
       percentage: 30,
-      flag: 'fas fa-language'
+      flag: '/assets/images/flags/india.svg'
     }
   ];
 }

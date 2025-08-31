@@ -235,8 +235,21 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.3rem;
-        color: #ffeaa7;
+        overflow: hidden;
+        
+        .flag-image {
+          width: 32px;
+          height: 24px;
+          object-fit: cover;
+          border-radius: 4px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .flag-fallback {
+          font-size: 1.5rem;
+          font-weight: bold;
+          color: #ffeaa7;
+        }
       }
 
       .language-details {
