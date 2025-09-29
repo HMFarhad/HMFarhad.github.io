@@ -23,9 +23,10 @@
         class="project-card"
         [class.featured]="project.featured">
         
-        <!-- Project Image Placeholder - You can add images later -->
+        <!-- Project Image -->
         <div class="project-image">
-          <div class="image-placeholder">
+          <img *ngIf="project.image" [src]="project.image" [alt]="project.title" class="project-img" />
+          <div *ngIf="!project.image" class="image-placeholder">
             <i class="fas fa-code" *ngIf="project.category === 'Game Development' || project.category === 'Computer Vision'"></i>
             <i class="fas fa-brain" *ngIf="project.category === 'Artificial Intelligence'"></i>
             <i class="fas fa-microchip" *ngIf="project.category === 'Hardware Design'"></i>

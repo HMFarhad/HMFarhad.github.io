@@ -9,6 +9,7 @@ interface Project {
   link?: string;
   github?: string;
   featured: boolean;
+  image?: string;
 }
 
 @Component({
@@ -26,6 +27,7 @@ export class ProjectsComponent {
       technologies: ['Web Development', 'E-commerce', 'Database', 'Payment Integration'],
       category: 'Web Development',
       github: 'https://github.com/HMFarhad/eCommerce-DEMO',
+      image: 'assets/images/projects/e-commerce.jpeg',
       featured: true
     },
     {
@@ -34,6 +36,7 @@ export class ProjectsComponent {
       technologies: ['Research', 'Academic Writing', 'Data Analysis', 'Methodology'],
       category: 'Research',
       link: 'https://www.theseus.fi/handle/10024/890922',
+      image: 'assets/images/projects/VAMK.jpg',
       featured: true
     },
     {
@@ -42,6 +45,7 @@ export class ProjectsComponent {
       technologies: ['Bengali NLP', 'Speech Recognition', 'Semantic Search', 'Flight API'],
       category: 'Web Development',
       github: 'https://github.com/HMFarhad/VoiceSearch-Bengali',
+      image: 'https://images.unsplash.com/photo-1589490740833-9991abcba5e4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: true
     },
     {
@@ -50,6 +54,7 @@ export class ProjectsComponent {
       technologies: ['MFCC', 'HMM', 'GMM', 'Bengali ASR', 'Research'],
       category: 'Research',
       link: 'https://www.researchgate.net/publication/SPEECH_TO_TEXT_CONVERSION_FOR_BENGALI_LANGUAGE',
+      image: 'https://images.unsplash.com/photo-1589254065878-42c9da997008?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -58,6 +63,7 @@ export class ProjectsComponent {
       technologies: ['System Design', 'Database Management', 'User Authentication', 'Assessment Tools'],
       category: 'Web Development',
       github: 'https://github.com/HMFarhad/DaulExaminerSystem',
+      image: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -66,6 +72,7 @@ export class ProjectsComponent {
       technologies: ['MATLAB', 'Image Processing', 'KNN', 'OCR'],
       category: 'Computer Vision',
       github: 'https://github.com/HMFarhad/Simple-OCR',
+      image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -73,6 +80,7 @@ export class ProjectsComponent {
       description: 'AI project examining and analyzing fundamental search algorithms using artificial intelligence techniques to solve the classic 8-puzzle problem.',
       technologies: ['AI', 'Search Algorithms', 'Problem Solving'],
       category: 'Artificial Intelligence',
+      image: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -81,6 +89,7 @@ export class ProjectsComponent {
       technologies: ['C++', 'OpenGL', 'GLUT', 'Game Development'],
       category: 'Game Development',
       github: 'https://github.com/HMFarhad/Flappy-Bird-using-Open-GL',
+      image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -88,6 +97,7 @@ export class ProjectsComponent {
       description: 'Microprocessor and I/O System project involving the complete design and simulation of an 8-bit computer system using Proteus software.',
       technologies: ['Proteus', 'Microprocessor', 'Digital Design'],
       category: 'Hardware Design',
+      image: 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     },
     {
@@ -95,6 +105,7 @@ export class ProjectsComponent {
       description: 'Digital Electronics course project focusing on the design and implementation of a 32-bit ALU, demonstrating understanding of digital logic and computer architecture.',
       technologies: ['Digital Logic', 'VHDL/Verilog', 'ALU Design'],
       category: 'Hardware Design',
+      image: 'https://images.unsplash.com/photo-1543674892-7d64d45df18b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
       featured: false
     }
   ];
