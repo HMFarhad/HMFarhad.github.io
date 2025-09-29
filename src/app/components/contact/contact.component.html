@@ -105,10 +105,16 @@
               class="form-control"
               placeholder="Tell me about your project or say hello..."></textarea>
           </div>
+
+          <!-- Submit Message -->
+          <div class="submit-message" *ngIf="submitMessage" [ngClass]="submitMessageType">
+            <i class="fas" [ngClass]="{'fa-check-circle': submitMessageType === 'success', 'fa-exclamation-circle': submitMessageType === 'error'}"></i>
+            {{ submitMessage }}
+          </div>
           
-          <button type="submit" class="btn btn-primary btn-submit" [disabled]="!contactForm.form.valid">
-            <i class="fas fa-paper-plane"></i>
-            Send Message
+          <button type="submit" class="btn btn-primary btn-submit" [disabled]="!contactForm.form.valid || isSubmitting">
+            <i class="fas" [ngClass]="{'fa-spinner fa-spin': isSubmitting, 'fa-paper-plane': !isSubmitting}"></i>
+            {{ isSubmitting ? 'Sending...' : 'Send Message' }}
           </button>
         </form>
       </div>
