@@ -9,6 +9,7 @@ interface FeaturedProject {
   link?: string;
   github?: string;
   image?: string;
+  category?: string;
 }
 
 @Component({
@@ -30,26 +31,27 @@ export class HeroComponent implements OnInit, OnDestroy {
   allProjects: FeaturedProject[] = [
     // Professional Projects
     {
-      title: 'AdvancePro - Inventory Management',
-      description: 'Canadian SaaS company providing inventory management solutions integrated with QuickBooks, Shopify, Avalara and other platforms.',
+      title: 'AdvancePro - Inventory Management System',
+      description: 'AdvancePro is a Canadian SaaS company providing inventory management solutions integrated with QuickBooks, Shopify, Avalara and other platforms. Enhanced API efficiency by doing a deep performance analysis and moving beyond strict REST conventions to design a lean, dedicated search API that returned only essential data, <strong>reducing response times by 30%</strong>. Integrated payment workflows with Authorize.net, enabling secure online transactions and automated invoice generation for <strong>200+ active business clients</strong>.',
       impact: 'Reduced API response times by 30% and enabled secure transactions for 200+ active business clients',
-      technologies: ['C# (.NET Core)', 'REST API', 'MSSQL', 'Entity Framework'],
+      technologies: ['C# (.NET Core)', 'REST API', 'MSSQL', 'Entity Framework Core', 'Integration', 'MVC'],
       link: 'https://aptx.ca/',
-      image: 'assets/images/projects/AdvancePro.png'
+      image: 'assets/images/projects/AdvancePro.png',
+      category: 'SaaS Platform'
     },
     {
-      title: 'eBilling System - FinTech Platform',
-      description: 'Malaysia-based FinTech e-payment solution for municipal utility bill payments across multiple municipalities.',
+      title: 'eBilling System - Municipal Payment Gateway',
+      description: 'MobilityOne Sdn Bhd is a Malaysia-based FinTech company that provides e-payment solutions and platforms for prepaid distribution, and electronic transactions. Built and maintained APIs in .NET Core with MSSQL and Oracle for a public-facing eBilling system used across multiple municipalities, enabling continuous payments for utility bills. Developed an automated settlement system using Hangfire background jobs to handle <strong>200–300 real-time daily transactions</strong>, <strong>reducing pending settlements by 90%</strong> and achieving <strong>>85% completion within 24 hours</strong>.',
       impact: 'Reduced pending settlements by 90% with 200-300 daily transactions achieving >85% completion within 24 hours',
-      technologies: ['C# (.NET Core)', 'MSSQL', 'Oracle 11g', 'Hangfire'],
+      technologies: ['C# (.NET Core)', 'Web API', 'MSSQL', 'Oracle 11g', 'API Integration', 'Hangfire'],
       link: 'https://www.mobilityonegroup.com/',
       image: 'assets/images/projects/eBilling.png'
     },
     {
-      title: 'Banglalink DMS - Supply Chain',
-      description: 'Distribution Management System serving telecommunications supply chain and logistics operations.',
+      title: 'Banglalink Distribution Management System (DMS)',
+      description: 'Enhanced supply chain transparency in the Banglalink DMS system serving <strong>4,500 distributors and 200,000 retailers</strong>, implementing <strong>real-time updates with SignalR</strong>. A comprehensive web-based solution that manages supply chain and logistics activities including warehouse inventory management among Distributor, RSO, Retailer and related entities. Successfully streamlined operations and improved data consistency across the entire distribution network.',
       impact: 'Enhanced supply chain transparency for 4,500 distributors and 200,000 retailers with real-time updates',
-      technologies: ['C# (ASP.NET)', 'Oracle 11g', 'SignalR', 'MVC'],
+      technologies: ['C# (ASP.NET)', 'MVC', 'Entity Framework', 'Oracle 11g', 'SignalR', 'n-tier Architecture'],
       link: 'https://blkdms.banglalink.net/',
       image: 'assets/images/projects/BL_DMS.png'
     },
@@ -164,6 +166,30 @@ export class HeroComponent implements OnInit, OnDestroy {
 
   goToProject(index: number): void {
     this.currentProjectIndex = index;
+  }
+
+  getCurrentProjectUrl(): string {
+    const currentProject = this.allProjects[this.currentProjectIndex];
+    if (currentProject) {
+      // Prefer live link over GitHub link
+      return currentProject.link || currentProject.github || '#';
+    }
+    return '#';
+  }
+
+  getCurrentProjectDomain(): string {
+    const url = this.getCurrentProjectUrl();
+    if (url === '#') return 'Project Details';
+    
+    try {
+      const domain = new URL(url).hostname.replace('www.', '');
+      if (domain.includes('github.com')) {
+        return '🔗 github.com/HMFarhad';
+      }
+      return `🌐 ${domain}`;
+    } catch {
+      return url;
+    }
   }
 
   scrollToSection(sectionId: string): void {
