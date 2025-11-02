@@ -347,7 +347,7 @@
     width: 100%;
     display: flex;
     justify-content: space-between;
-    padding: 0 -1rem;
+    padding: 0 1rem;
     pointer-events: none;
     
     .slider-btn {
@@ -372,12 +372,12 @@
       }
       
       &.prev {
-        left: -20px;
+        left: 10px;
         position: absolute;
       }
       
       &.next {
-        right: -20px;
+        right: 10px;
         position: absolute;
       }
     }
@@ -571,17 +571,19 @@
     }
     
     .slider-controls {
+      padding: 0 0.5rem;
+      
       .slider-btn {
         width: 35px;
         height: 35px;
         font-size: 0.9rem;
         
         &.prev {
-          left: -15px;
+          left: 5px;
         }
         
         &.next {
-          right: -15px;
+          right: 5px;
         }
       }
     }
