@@ -27,6 +27,7 @@
         <div class="project-image">
           <img *ngIf="project.image" [src]="project.image" [alt]="project.title" class="project-img" />
           <div *ngIf="!project.image" class="image-placeholder">
+            <i class="fas fa-briefcase" *ngIf="project.category === 'Professional Work'"></i>
             <i class="fas fa-code" *ngIf="project.category === 'Game Development' || project.category === 'Computer Vision'"></i>
             <i class="fas fa-brain" *ngIf="project.category === 'Artificial Intelligence'"></i>
             <i class="fas fa-microchip" *ngIf="project.category === 'Hardware Design'"></i>
@@ -39,7 +40,7 @@
         <!-- Project Content -->
         <div class="project-content">
           <h3 class="project-title">{{ project.title }}</h3>
-          <p class="project-description">{{ project.description }}</p>
+          <p class="project-description" [innerHTML]="project.description"></p>
           
           <!-- Technologies -->
           <div class="project-technologies">
@@ -52,9 +53,17 @@
               <i class="fab fa-github"></i>
               <span>GitHub</span>
             </a>
-            <a *ngIf="project.link" [href]="project.link" target="_blank" class="project-link demo">
+            <a *ngIf="project.link && project.category === 'Research'" [href]="project.link" target="_blank" class="project-link demo">
               <i class="fas fa-external-link-alt"></i>
               <span>View Paper</span>
+            </a>
+            <a *ngIf="project.link && project.category === 'Professional Work'" [href]="project.link" target="_blank" class="project-link demo">
+              <i class="fas fa-external-link-alt"></i>
+              <span>Visit Site</span>
+            </a>
+            <a *ngIf="project.link && project.category !== 'Research' && project.category !== 'Professional Work'" [href]="project.link" target="_blank" class="project-link demo">
+              <i class="fas fa-external-link-alt"></i>
+              <span>View Project</span>
             </a>
           </div>
         </div>

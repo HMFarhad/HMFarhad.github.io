@@ -31,19 +31,61 @@
         </div>
       </div>
       <div class="hero-visual">
-        <div class="profile-card">
-          <div class="profile-image">
-            <img src="/assets/images/profile.jpg" alt="Hossain MD Farhad" class="profile-img" 
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-            <div class="image-placeholder" style="display: none;">
-              <i class="fas fa-user"></i>
+        <div class="project-showcase">
+          <div class="showcase-header">
+            <h3>Projects</h3>
+            <div class="project-indicators">
+              <button 
+                *ngFor="let project of allProjects; let i = index"
+                class="indicator"
+                [class.active]="i === currentProjectIndex"
+                (click)="goToProject(i)">
+              </button>
             </div>
           </div>
-          <div class="floating-elements">
-            <div class="floating-element element-1">C#</div>
-            <div class="floating-element element-2">Angular</div>
-            <div class="floating-element element-3">.NET</div>
-            <div class="floating-element element-4">SQL</div>
+          
+          <div class="project-slider">
+            <div class="project-card" *ngFor="let project of allProjects; let i = index" 
+                 [class.active]="i === currentProjectIndex"
+                 [attr.data-index]="i">
+              <div class="project-image">
+                <img [src]="project.image" [alt]="project.title" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                <div class="image-placeholder" style="display: none;">
+                  <i class="fas fa-code"></i>
+                </div>
+              </div>
+              
+              <div class="project-content">
+                <h4 class="project-title">{{ project.title }}</h4>
+                <p class="project-description">{{ project.description }}</p>
+                <div class="project-impact">
+                  <strong>Impact:</strong> {{ project.impact }}
+                </div>
+                <div class="project-technologies">
+                  <span *ngFor="let tech of project.technologies.slice(0, 3)" class="tech-tag">
+                    {{ tech }}
+                  </span>
+                </div>
+                <div class="project-actions">
+                  <a *ngIf="project.link" [href]="project.link" target="_blank" class="project-link">
+                    <i class="fas fa-external-link-alt"></i>
+                  </a>
+                  <a *ngIf="project.github" [href]="project.github" target="_blank" class="project-link">
+                    <i class="fab fa-github"></i>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="slider-controls">
+            <button class="slider-btn prev" (click)="previousProject()">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="slider-btn next" (click)="nextProject()">
+              <i class="fas fa-chevron-right"></i>
+            </button>
           </div>
         </div>
       </div>

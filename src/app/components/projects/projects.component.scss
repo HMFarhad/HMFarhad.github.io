@@ -204,6 +204,15 @@
     line-height: 1.6;
     margin-bottom: 1rem;
     font-size: 0.95rem;
+
+    strong {
+      color: #667eea;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
   }
 }
 
