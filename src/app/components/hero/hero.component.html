@@ -32,8 +32,18 @@
       </div>
       <div class="hero-visual">
         <div class="project-showcase">
+          <div class="browser-bar">
+            <a 
+              [href]="getCurrentProjectUrl()" 
+              target="_blank" 
+              class="browser-url"
+              [class.disabled]="getCurrentProjectUrl() === '#'"
+              [title]="'Visit ' + allProjects[currentProjectIndex].title">
+              {{ getCurrentProjectDomain() }}
+            </a>
+          </div>
           <div class="showcase-header">
-            <h3>Projects</h3>
+            <h3>{{ allProjects[currentProjectIndex].title }}</h3>
             <div class="project-indicators">
               <button 
                 *ngFor="let project of allProjects; let i = index"
@@ -57,22 +67,23 @@
               </div>
               
               <div class="project-content">
-                <h4 class="project-title">{{ project.title }}</h4>
-                <p class="project-description">{{ project.description }}</p>
+                <div class="project-description-full" [innerHTML]="project.description"></div>
                 <div class="project-impact">
                   <strong>Impact:</strong> {{ project.impact }}
                 </div>
                 <div class="project-technologies">
-                  <span *ngFor="let tech of project.technologies.slice(0, 3)" class="tech-tag">
+                  <span *ngFor="let tech of project.technologies" class="tech-tag">
                     {{ tech }}
                   </span>
                 </div>
                 <div class="project-actions">
                   <a *ngIf="project.link" [href]="project.link" target="_blank" class="project-link">
                     <i class="fas fa-external-link-alt"></i>
+                    <span>Live Demo</span>
                   </a>
                   <a *ngIf="project.github" [href]="project.github" target="_blank" class="project-link">
                     <i class="fab fa-github"></i>
+                    <span>Source Code</span>
                   </a>
                 </div>
               </div>
