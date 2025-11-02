@@ -9,6 +9,7 @@ import { BlogComponent } from './components/blog/blog.component';
 import { ExperienceComponent } from './components/experience/experience.component';
 import { EducationComponent } from './components/education/education.component';
 import { ContactComponent } from './components/contact/contact.component';
+import { TestimonialsComponent } from './components/testimonials/testimonials.component';
 import { FooterComponent } from './components/footer/footer.component';
 
 @Component({
@@ -24,6 +25,7 @@ import { FooterComponent } from './components/footer/footer.component';
     BlogComponent,
     ExperienceComponent,
     EducationComponent,
+    TestimonialsComponent,
     ContactComponent,
     FooterComponent
   ],
