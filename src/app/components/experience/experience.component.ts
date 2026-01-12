@@ -23,7 +23,7 @@ interface Experience {
 export class ExperienceComponent {
   experiences: Experience[] = [
     {
-      position: 'Senior Software Engineer (Freelance)',
+      position: 'Software Engineer (Freelance)',
       company: 'AdvancePro Technologies',
       duration: 'January 2023 – Present',
       description: 'Leading backend development of AdvancePro inventory management system.',
@@ -38,7 +38,7 @@ export class ExperienceComponent {
       icon: 'fas fa-rocket'
     },
     {
-      position: 'Senior .NET Programmer',
+      position: '.NET Programmer',
       company: 'MobilityOne Sdn Bhd',
       duration: 'December 2022 – August 2024',
       description: 'Developed enterprise applications and automated billing systems.',
@@ -55,7 +55,7 @@ export class ExperienceComponent {
     {
       position: 'Software Engineer',
       company: 'Prime Tech Solution Limited',
-      duration: 'March 2018 – December 2022',
+      duration: 'March 2018 – December 2020',
       description: 'Developed testable code and deployed software systems.',
       achievements: [
         'Built backend APIs for .NET Core & Angular e-commerce application',
