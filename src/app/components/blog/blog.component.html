@@ -69,16 +69,16 @@
         </div>
 
         <div class="post-content">
-          <div class="content-wrapper" [innerHTML]="selectedPost.content | slice:0:2000"></div>
+          <div class="content-wrapper" [innerHTML]="selectedPost.content"></div>
           
           <div class="content-footer">
             <p class="read-full-note">
               <i class="fas fa-info-circle"></i>
-              This is an excerpt. Read the full article on Medium for the complete experience.
+              This article is also published on Medium.
             </p>
-            <a [href]="selectedPost.mediumUrl" target="_blank" class="btn-read-full">
+            <a [href]="selectedPost.mediumUrl" target="_blank" rel="noopener noreferrer" class="btn-read-full">
               <i class="fab fa-medium"></i>
-              <span>Read Full Article on Medium</span>
+              <span>View on Medium</span>
             </a>
           </div>
         </div>
