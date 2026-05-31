@@ -18,4 +18,19 @@
   @if (hoverIndex() !== null) {
     <div class="tooltip">{{ zoneTitle(hoverIndex()) }}</div>
   }
+
+  @if (isContactActive() && contactLinks(); as c) {
+    <div class="contact-overlay" role="region" aria-label="Contact links">
+      <a class="contact-pill primary" [href]="'mailto:' + c.email">
+        ✉ {{ c.email }}
+      </a>
+      <div class="contact-links">
+        @for (l of c.links; track l.url) {
+          <a class="contact-pill" [href]="l.url" target="_blank" rel="noopener noreferrer">
+            {{ l.label }} ↗
+          </a>
+        }
+      </div>
+    </div>
+  }
 </div>

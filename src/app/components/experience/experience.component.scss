@@ -47,3 +47,48 @@
   border: 1px solid rgba(255,255,255,.1);
   pointer-events: none;
 }
+
+.contact-overlay {
+  position: absolute; left: 50%; bottom: 2.25rem;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: .65rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.contact-overlay .contact-links {
+  display: flex; flex-wrap: wrap; gap: .55rem; justify-content: center;
+}
+
+.contact-pill {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .55rem 1rem;
+  border-radius: 999px;
+  font: 600 14px/1 system-ui, "Segoe UI", sans-serif;
+  letter-spacing: .02em;
+  color: #e6f7ff;
+  text-decoration: none;
+  background: rgba(8, 22, 32, 0.78);
+  border: 1px solid rgba(180, 240, 255, 0.55);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .55), 0 0 0 1px rgba(120, 220, 255, 0.18) inset;
+  backdrop-filter: blur(6px);
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.contact-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(20, 50, 70, 0.85);
+  border-color: rgba(220, 250, 255, 0.85);
+}
+
+.contact-pill.primary {
+  background: rgba(255, 220, 140, 0.92);
+  color: #1a1408;
+  border-color: rgba(255, 240, 200, 0.95);
+  font-weight: 700;
+}
+
+.contact-pill.primary:hover {
+  background: rgba(255, 235, 180, 1);
+}

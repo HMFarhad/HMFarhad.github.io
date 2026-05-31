@@ -172,8 +172,21 @@ export class ForestScene {
 
   // ---------------- camera ----------------
   private placeCameraAtProgress(p: number): void {
-    const pos    = this.curve.getPointAt(p);
-    const lookAt = this.curve.getPointAt(Math.min(1, p + 0.02));
+    const pos = this.curve.getPointAt(p);
+
+    // Pick a forward look-target. Near the end of the trail (p ≈ 1) the
+    // naive `getPointAt(p + 0.02)` clamps to the same point as `pos`, so
+    // the lookAt collapses to a straight-down vector. Instead, when we
+    // are near the end, look BACK along the tangent (extrapolate forward
+    // using the tangent at the end) so the camera stays level.
+    let lookAt: THREE.Vector3;
+    if (p < 0.98) {
+      lookAt = this.curve.getPointAt(Math.min(1, p + 0.02));
+    } else {
+      const tan = this.curve.getTangentAt(1).clone().normalize();
+      lookAt = pos.clone().add(tan.multiplyScalar(2));
+    }
+
     pos.y    += 1.65;
     lookAt.y += 1.5;
     this.camera.position.copy(pos);

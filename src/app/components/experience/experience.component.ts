@@ -149,4 +149,17 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
     if (i == null || i < 0 || i >= this.zones.length) return null;
     return this.zones[i].title;
   }
+
+  /** True when the walker is parked at the Contact zone. */
+  isContactActive(): boolean {
+    const z = this.zones[this.activeIndex()];
+    return !!z && z.id === 'contact';
+  }
+
+  /** Email + clickable links to render as a real DOM overlay. */
+  contactLinks(): { email: string; links: { label: string; url: string }[] } | null {
+    const z = this.zones.find((zz) => zz.id === 'contact');
+    if (!z || z.id !== 'contact') return null;
+    return { email: z.payload.email, links: z.payload.links };
+  }
 }

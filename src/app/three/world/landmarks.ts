@@ -2,9 +2,19 @@ import * as THREE from 'three';
 import type { Zone } from '../../core/content/zone.model';
 
 /**
- * One stylised primitive group per zone, positioned at the station progress
- * along the curve. Every descendant gets `userData.stationIndex` so the
- * raycaster can attribute hits.
+ * Each station is a futuristic, transparent holographic screen floating
+ * in mid-air over the trail.
+ *
+ * Composition per station:
+ *   - A faint cyan ground projector ring (just a glow disc).
+ *   - A holographic "screen" plane: transparent canvas with cyan grid,
+ *     scanlines, corner brackets, and emissive HUD text rendered from
+ *     the zone's content.
+ *   - A second additive-blended copy slightly behind for bloom/halo.
+ *
+ * No solid frames, no pedestals, no support posts — the screen reads as
+ * a holo-projection. All descendants carry `userData.stationIndex` so
+ * the raycaster attributes hits to the right zone.
  */
 export function buildStationLandmarks(
   zones: Zone[],
@@ -14,110 +24,471 @@ export function buildStationLandmarks(
   const root = new THREE.Group();
 
   zones.forEach((zone, idx) => {
-    const p  = curve.getPointAt(stationProgress[idx] ?? idx / Math.max(1, zones.length - 1));
-    const tan = curve.getTangentAt(stationProgress[idx] ?? idx / Math.max(1, zones.length - 1));
-    const side = new THREE.Vector3().crossVectors(tan, new THREE.Vector3(0, 1, 0)).normalize();
-    // park the landmark on the right side, off the trail
-    const offset = side.clone().multiplyScalar(3.5);
+    const t   = stationProgress[idx] ?? idx / Math.max(1, zones.length - 1);
+    const p   = curve.getPointAt(t);
 
-    const group = makeLandmark(zone.id);
-    group.position.set(p.x + offset.x, 0, p.z + offset.z);
-    group.lookAt(p.x, group.position.y, p.z); // face the trail
+    // Place the screen a small bit FURTHER ALONG the curve than the snap
+    // point so when the walker eases into the snap they see the screen
+    // straight ahead. For zones near the very end of the trail there is
+    // no "ahead" left, so we extrapolate using the end tangent — that
+    // keeps the screen front oriented toward the walker, no mirror.
+    const VIEW_DELTA = 0.012;
+    const tAhead = t + VIEW_DELTA;
 
-    group.traverse((o) => { o.userData['stationIndex'] = idx; });
-    root.add(group);
+    const station = makeHoloScreen(zone);
+    if (tAhead <= 1) {
+      const sp = curve.getPointAt(tAhead);
+      station.position.set(sp.x, 0, sp.z);
+      // lookAt the snap point — screen +Z faces walker arriving at p.
+      station.lookAt(p.x, station.position.y, p.z);
+    } else {
+      // Beyond the curve end: extrapolate using the end tangent.
+      const tan = curve.getTangentAt(1).clone().normalize();
+      const reach = VIEW_DELTA * (curve.getLength());
+      station.position.set(p.x + tan.x * reach, 0, p.z + tan.z * reach);
+      // Walker is behind us along -tangent. Aim screen +Z back along
+      // -tangent so its front face shows the content head-on.
+      station.lookAt(
+        station.position.x - tan.x,
+        station.position.y,
+        station.position.z - tan.z
+      );
+    }
+
+    station.traverse((o) => { o.userData['stationIndex'] = idx; });
+    root.add(station);
   });
 
   return root;
 }
 
-function makeLandmark(id: string): THREE.Group {
+function makeHoloScreen(zone: Zone): THREE.Group {
   const g = new THREE.Group();
-  const mat = (color: number, rough = 0.6) =>
-    new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05 });
 
-  switch (id) {
+  const screenW = 5.4;
+  const screenH = 3.15;
+  const screenY = 2.4; // floats at eye level
+
+  // ---- ground projector: subtle cyan disc on the floor ----
+  const projTex = makeProjectorDiscTexture();
+  const proj = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 2.6),
+    new THREE.MeshBasicMaterial({
+      map: projTex,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      color: 0x9ee6ff,
+      opacity: 0.55,
+    })
+  );
+  proj.rotation.x = -Math.PI / 2;
+  proj.position.y = 0.02;
+  g.add(proj);
+
+  // ---- thin "beam" rising from the projector to the screen base ----
+  // Simulated with a tall narrow additive plane (cheaper than a cone).
+  const beamTex = makeBeamTexture();
+  const beam = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.0, screenY - 0.05),
+    new THREE.MeshBasicMaterial({
+      map: beamTex,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      color: 0x9ee6ff,
+      opacity: 0.35,
+    })
+  );
+  beam.position.set(0, (screenY - 0.05) / 2 + 0.02, 0);
+  // Make the beam billboard-like by leaving it on the screen plane —
+  // it's mostly visible from the front anyway.
+  g.add(beam);
+
+  // ---- main holographic screen ----
+  // Use NormalBlending with a translucent dark-glass background baked
+  // into the canvas so text always has guaranteed contrast against the
+  // forest behind it. The glow plane behind it adds the holographic feel.
+  const tex = makeHoloPanelTexture(zone);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(screenW, screenH),
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      opacity: 1.0,
+    })
+  );
+  screen.position.set(0, screenY, 0);
+  g.add(screen);
+
+  // ---- back glow halo: soft radial behind for bloom (no text ghost) ----
+  const glowTex = makeScreenHaloTexture();
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(screenW * 1.25, screenH * 1.4),
+    new THREE.MeshBasicMaterial({
+      map: glowTex,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      color: 0x66e0ff,
+      opacity: 0.55,
+    })
+  );
+  glow.position.set(0, screenY, 0.05);
+  g.add(glow);
+
+  return g;
+}
+
+// =================== textures ===================
+
+function makeProjectorDiscTexture(size = 256): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const cx = size / 2, cy = size / 2;
+  // Outer ring glow
+  const grad = ctx.createRadialGradient(cx, cy, size * 0.20, cx, cy, size * 0.5);
+  grad.addColorStop(0,    'rgba(150,230,255,0.0)');
+  grad.addColorStop(0.55, 'rgba(150,230,255,0.55)');
+  grad.addColorStop(0.78, 'rgba(110,210,255,0.35)');
+  grad.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  // Crisp ring
+  ctx.strokeStyle = 'rgba(180,240,255,0.85)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.42, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(180,240,255,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.30, 0, Math.PI * 2);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeBeamTexture(w = 64, h = 256): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  // Vertical gradient: bright at bottom, fade to top, plus center-vs-edge falloff.
+  const vert = ctx.createLinearGradient(0, h, 0, 0);
+  vert.addColorStop(0,   'rgba(170,235,255,0.55)');
+  vert.addColorStop(0.4, 'rgba(170,235,255,0.18)');
+  vert.addColorStop(1,   'rgba(170,235,255,0.0)');
+  ctx.fillStyle = vert;
+  ctx.fillRect(0, 0, w, h);
+  // Horizontal falloff
+  const horiz = ctx.createLinearGradient(0, 0, w, 0);
+  horiz.addColorStop(0,   'rgba(0,0,0,1)');
+  horiz.addColorStop(0.5, 'rgba(0,0,0,0)');
+  horiz.addColorStop(1,   'rgba(0,0,0,1)');
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = horiz;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = 'source-over';
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeScreenHaloTexture(w = 256, h = 192): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const cx = w / 2, cy = h / 2;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) / 2);
+  grad.addColorStop(0,    'rgba(150,230,255,0.55)');
+  grad.addColorStop(0.45, 'rgba(110,210,255,0.25)');
+  grad.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Render the zone's content into a 1024×608 holographic-style canvas
+ * (transparent background, cyan grid + scanlines + corner brackets +
+ * HUD-styled emissive text). With AdditiveBlending on the mesh, the
+ * darker pixels disappear and the light pixels glow against the forest.
+ */
+function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
+  const W = 1536, H = 896;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  // Fully transparent panel — no background fill. Keep only frame + text.
+  ctx.clearRect(0, 0, W, H);
+
+  // ---- subtle grid lines (very faint, hint of structure) ----
+  ctx.save();
+  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(20, 60, 140, 0.10)';
+  ctx.lineWidth = 1;
+  const cell = 64;
+  for (let x = 16; x < W - 16; x += cell) {
+    ctx.beginPath(); ctx.moveTo(x, 16); ctx.lineTo(x, H - 16); ctx.stroke();
+  }
+  for (let y = 16; y < H - 16; y += cell) {
+    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // ---- outer rounded outline ----
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(20, 70, 160, 0.95)';
+  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
+  ctx.stroke();
+
+  // ---- corner brackets ----
+  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 42, 'rgba(15, 60, 150, 1.0)', 5);
+
+  // ---- header bar (transparent, just an underline) ----
+  ctx.strokeStyle = 'rgba(20, 70, 160, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(40, 110); ctx.lineTo(W - 40, 110);
+  ctx.stroke();
+
+  // Outline-and-fill: every fillText below first strokes a thick dark navy
+  // outline, then fills with white. This keeps text legible against both
+  // dark trunks and bright sun patches.
+  const baseFillText = ctx.fillText.bind(ctx);
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  (ctx as any).fillText = (text: string, tx: number, ty: number, maxW?: number) => {
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(6, 16, 50, 0.95)';
+    if (maxW != null) ctx.strokeText(text, tx, ty, maxW);
+    else ctx.strokeText(text, tx, ty);
+    const prev = ctx.fillStyle;
+    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+    if (maxW != null) baseFillText(text, tx, ty, maxW);
+    else baseFillText(text, tx, ty);
+    ctx.fillStyle = prev;
+  };
+
+  // Header title.
+  ctx.font = '800 40px "Segoe UI", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('// ' + zone.title.toUpperCase(), 64, 75);
+  ctx.textBaseline = 'top';
+
+  // Body content (zone-typed). Color values are kept for compatibility but
+  // the override above paints every line white with a navy outline.
+  const bodyX = 64;
+  let y = 150;
+  const accent  = 'rgba(0, 90, 200, 1.0)';
+  const primary = 'rgba(6, 24, 80, 1.0)';
+  const muted   = 'rgba(15, 40, 110, 1.0)';
+  const dim     = 'rgba(25, 60, 130, 1.0)';
+
+  const wrap = (txt: string, font: string, lineHeight: number, maxW: number) => {
+    ctx.font = font;
+    const lines = wrapText(ctx, txt, maxW);
+    for (const ln of lines) {
+      if (y > H - 56) return;
+      ctx.fillText(ln, bodyX, y);
+      y += lineHeight;
+    }
+  };
+
+  switch (zone.id) {
     case 'about': {
-      // dais
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.2, 0.3, 24), mat(0x9aa28a));
-      base.position.y = 0.15;
-      g.add(base);
-      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.45, 24, 16), mat(0xe6dcb6, 0.3));
-      orb.position.y = 0.85;
-      g.add(orb);
+      ctx.fillStyle = primary;
+      ctx.font = '600 64px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText(zone.payload.name, bodyX, y); y += 80;
+      ctx.fillStyle = accent;
+      wrap(zone.payload.tagline, 'italic 600 32px "Segoe UI", system-ui, sans-serif', 44, W - bodyX - 80);
+      y += 20;
+      ctx.fillStyle = muted;
+      wrap(zone.payload.bio, '400 28px "Segoe UI", system-ui, sans-serif', 40, W - bodyX - 80);
       break;
     }
     case 'education': {
-      // stacked slabs
-      for (let i = 0; i < 3; i++) {
-        const s = new THREE.Mesh(new THREE.BoxGeometry(1.4 - i * 0.2, 0.18, 0.9 - i * 0.1), mat(0xb0a586));
-        s.position.y = 0.09 + i * 0.20;
-        g.add(s);
+      for (const it of zone.payload.items) {
+        ctx.fillStyle = primary;
+        ctx.font = '700 36px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(it.institution, bodyX, y); y += 46;
+        ctx.fillStyle = accent;
+        ctx.font = '600 26px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(`${it.degree} · ${it.period}`, bodyX, y); y += 38;
+        if (it.details) {
+          ctx.fillStyle = muted;
+          wrap(it.details, '400 24px "Segoe UI", system-ui, sans-serif', 34, W - bodyX - 80);
+        }
+        y += 24;
+        if (y > H - 90) break;
       }
       break;
     }
     case 'skills': {
-      // pillar + geode
-      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.6, 12), mat(0x8a8e7a));
-      pillar.position.y = 0.8;
-      g.add(pillar);
-      const geo = new THREE.Mesh(new THREE.IcosahedronGeometry(0.45, 0), mat(0x7fb6c7, 0.25));
-      geo.position.y = 1.85;
-      g.add(geo);
+      const groups = zone.payload.groups.slice(0, 3);
+      const colW = (W - bodyX - 80) / Math.max(1, groups.length);
+      let cx = bodyX;
+      for (const grp of groups) {
+        let cy = y;
+        ctx.fillStyle = primary;
+        ctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(grp.name, cx, cy); cy += 44;
+        ctx.fillStyle = muted;
+        ctx.font = '500 24px "Segoe UI", system-ui, sans-serif';
+        for (const s of grp.items) {
+          if (cy > H - 80) break;
+          ctx.fillText('› ' + s, cx, cy); cy += 34;
+        }
+        cx += colW;
+      }
       break;
     }
     case 'experience': {
-      // big tree (tall)
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 3, 10), mat(0x5a4632, 0.95));
-      trunk.position.y = 1.5;
-      g.add(trunk);
-      const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 1), mat(0x547035, 0.85));
-      leaves.position.y = 3.4;
-      g.add(leaves);
+      for (const it of zone.payload.items) {
+        ctx.fillStyle = primary;
+        ctx.font = '700 32px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(`${it.role} — ${it.company}`, bodyX, y); y += 42;
+        ctx.fillStyle = accent;
+        ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(it.period, bodyX, y); y += 34;
+        ctx.fillStyle = muted;
+        wrap(it.summary, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
+        if (it.highlights) {
+          for (const h of it.highlights.slice(0, 3)) {
+            if (y > H - 80) break;
+            ctx.fillStyle = dim;
+            ctx.font = '400 22px "Segoe UI", system-ui, sans-serif';
+            ctx.fillText('› ' + h, bodyX + 18, y); y += 30;
+          }
+        }
+        y += 18;
+        if (y > H - 90) break;
+      }
       break;
     }
     case 'projects': {
-      // three lamps
-      for (let i = -1; i <= 1; i++) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.6, 6), mat(0x444444));
-        post.position.set(i * 0.7, 0.8, 0);
-        g.add(post);
-        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12),
-          new THREE.MeshStandardMaterial({ color: 0xffe6a3, emissive: 0xffd070, emissiveIntensity: 1.2, roughness: 0.4 }));
-        lamp.position.set(i * 0.7, 1.65, 0);
-        g.add(lamp);
+      const items = zone.payload.items.slice(0, 3);
+      for (const p of items) {
+        ctx.fillStyle = primary;
+        ctx.font = '700 32px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(p.name, bodyX, y); y += 42;
+        ctx.fillStyle = muted;
+        wrap(p.blurb, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
+        ctx.fillStyle = accent;
+        ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(p.tech.join(' · '), bodyX, y); y += 32;
+        y += 12;
+        if (y > H - 90) break;
       }
       break;
     }
     case 'blogs': {
-      // book slabs
-      for (let i = 0; i < 4; i++) {
-        const book = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.5), mat(0x8a5a3a));
-        book.position.y = 0.04 + i * 0.10;
-        book.rotation.y = (Math.random() - 0.5) * 0.4;
-        g.add(book);
+      for (const b of zone.payload.items) {
+        ctx.fillStyle = primary;
+        ctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(b.title, bodyX, y); y += 40;
+        ctx.fillStyle = accent;
+        ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(b.date, bodyX, y); y += 32;
+        ctx.fillStyle = muted;
+        wrap(b.excerpt, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
+        y += 18;
+        if (y > H - 90) break;
       }
       break;
     }
     case 'contact': {
-      // cantilever beacon
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 8), mat(0x444444));
-      post.position.y = 1.2;
-      g.add(post);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), mat(0x444444));
-      arm.position.set(0.4, 2.3, 0);
-      g.add(arm);
-      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12),
-        new THREE.MeshStandardMaterial({ color: 0xff8a55, emissive: 0xff7040, emissiveIntensity: 1.4 }));
-      beacon.position.set(0.85, 2.3, 0);
-      g.add(beacon);
+      ctx.fillStyle = primary;
+      ctx.font = '600 44px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('Get in touch', bodyX, y); y += 64;
+      ctx.fillStyle = accent;
+      ctx.font = '600 32px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText(zone.payload.email, bodyX, y); y += 56;
+      ctx.fillStyle = muted;
+      ctx.font = '400 26px "Segoe UI", system-ui, sans-serif';
+      for (const l of zone.payload.links) {
+        if (y > H - 80) break;
+        ctx.fillText(`› ${l.label}`, bodyX, y); y += 38;
+      }
       break;
     }
-    default: {
-      const fallback = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat(0xaaaaaa));
-      fallback.position.y = 0.5;
-      g.add(fallback);
+  }
+
+  // ---- footer hairline + scroll cue ----
+  ctx.fillStyle = 'rgba(20, 70, 160, 0.55)';
+  ctx.fillRect(40, H - 64, W - 80, 1);
+  ctx.fillStyle = 'rgba(10, 40, 110, 0.95)';
+  ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 46);
+  ctx.textAlign = 'left';
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function drawRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+function drawCornerBrackets(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number,
+  size: number, color: string, lineWidth: number
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  // top-left
+  ctx.beginPath();
+  ctx.moveTo(x, y + size); ctx.lineTo(x, y); ctx.lineTo(x + size, y); ctx.stroke();
+  // top-right
+  ctx.beginPath();
+  ctx.moveTo(x + w - size, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + size); ctx.stroke();
+  // bottom-right
+  ctx.beginPath();
+  ctx.moveTo(x + w, y + h - size); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - size, y + h); ctx.stroke();
+  // bottom-left
+  ctx.beginPath();
+  ctx.moveTo(x + size, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - size); ctx.stroke();
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const w of words) {
+    const next = line ? line + ' ' + w : w;
+    if (ctx.measureText(next).width > maxW && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = next;
     }
   }
-  return g;
+  if (line) lines.push(line);
+  return lines;
 }
