@@ -71,7 +71,14 @@
     }
 
     @if (isContact(z) && z.id === 'contact') {
-      <p>Email: <a [href]="'mailto:' + z.payload.email">{{ z.payload.email }}</a></p>
+      <p class="lead">Let’s grab a coffee ☕</p>
+      <p>
+        Building something together would be brilliant — but even if there’s
+        no project on the table, I’d still love to meet up, swap stories and
+        grow the network. Drop me a line at
+        <a [href]="'mailto:' + z.payload.email">{{ z.payload.email }}</a>
+        and we’ll find a time.
+      </p>
       <ul class="links">
         @for (l of z.payload.links; track l.url) {
           <li><a [href]="l.url" target="_blank" rel="noopener">{{ l.label }}</a></li>

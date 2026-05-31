@@ -49,11 +49,14 @@
 }
 
 .contact-overlay {
-  position: absolute; left: 50%; bottom: 2.25rem;
-  transform: translateX(-50%);
+  // Sit inside the holographic billboard window — roughly the lower
+  // third of the screen panel, where the "Tap a link below ↓" line lands.
+  position: absolute; left: 50%; top: 58%;
+  transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: .65rem;
   pointer-events: none;
   z-index: 5;
+  max-width: min(620px, 80vw);
 }
 
 .contact-overlay .contact-links {

@@ -441,15 +441,20 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
     case 'contact': {
       ctx.fillStyle = primary;
       ctx.font = '600 60px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText('Get in touch', bodyX, y); y += 80;
-      ctx.fillStyle = accent;
-      ctx.font = '600 42px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText(zone.payload.email, bodyX, y); y += 64;
+      ctx.fillText('Let’s grab a coffee ☕', bodyX, y); y += 80;
       ctx.fillStyle = muted;
-      ctx.font = '400 34px "Segoe UI", system-ui, sans-serif';
-      for (const l of zone.payload.links) {
-        if (y > H - 80) break;
-        ctx.fillText(`› ${l.label}`, bodyX, y); y += 46;
+      wrap(
+        'Working on a project together would be great — but even if you’re not, I’d still love to meet up, swap stories and grow the network. Reach out anytime.',
+        '400 40px "Segoe UI", system-ui, sans-serif',
+        46,
+        W - bodyX - 80
+      );
+      y += 18;
+      ctx.fillStyle = accent;
+      ctx.font = '600 38px "Segoe UI", system-ui, sans-serif';
+      if (y < H - 110) {
+        ctx.fillText('Tap a link below ↓', bodyX, y);
+        y += 56;
       }
       break;
     }
