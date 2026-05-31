@@ -93,6 +93,36 @@
   }
 }
 
+.nav-item-3d {
+  .nav-3d-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.05);
+      box-shadow: 0 6px 18px rgba(102, 126, 234, 0.5);
+    }
+
+    .nav-3d-icon {
+      display: inline-block;
+      transform: rotate(45deg);
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+  }
+}
+
 .nav-toggle {
   display: none;
   flex-direction: column;
