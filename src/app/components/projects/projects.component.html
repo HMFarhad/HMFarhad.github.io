@@ -42,8 +42,8 @@
           <h3 class="project-title">{{ project.title }}</h3>
           <p class="project-description" [innerHTML]="project.description"></p>
           
-          <!-- Technologies -->
-          <div class="project-technologies">
+          <!-- Technologies (hidden for Professional Work) -->
+          <div class="project-technologies" *ngIf="project.category !== 'Professional Work'">
             <span *ngFor="let tech of project.technologies" class="tech-tag">{{ tech }}</span>
           </div>
 
