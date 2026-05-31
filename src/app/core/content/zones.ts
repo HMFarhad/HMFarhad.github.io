@@ -82,40 +82,54 @@ export const ZONES: Zone[] = [
     title: 'Experience',
     enabled: true,
     payload: {
+      // LIFO order: most recent role first. The 3D scene renders one
+      // holographic screen per item, placed back-to-back along the trail
+      // at the Experience station so the walker passes them in sequence.
       items: [
         {
-          company: 'AdvancePro Technologies',
           role: 'Software Engineer (Freelance)',
-          period: 'Jan 2023 – Sep 2025',
-          summary: 'Canadian SaaS inventory management platform integrated with Shopify, WooCommerce and QuickBooks.',
+          company: 'AdvancePro Technologies',
+          blurb: 'Canadian SaaS inventory management platform integrated with Shopify, WooCommerce, and QuickBooks.',
+          period: 'January 2023 – September 2025',
+          summary: 'Leading backend development of AdvancePro inventory management system.',
           highlights: [
-            'Designed and optimized backend REST APIs in C#, .NET Core and EF Core, supporting real-time inventory and order operations for 200+ active business clients.',
-            'Identified bottlenecks in an existing API surface and redesigned endpoints beyond strict REST conventions, reducing response times by ~30% under peak load.',
-            'Delivered reliable data synchronization across multiple external systems, ensuring consistency for inventory, orders and financial data.',
-            'Contributed to code reviews and refactoring, improving maintainability and reducing production issues.'
-          ]
+            'Developed complete backend architecture with optimized performance',
+            'Built robust RESTful APIs for third-party integrations',
+            'Integrated with Shopify, Avalara, and other major platforms'
+          ],
+          challenge: 'Backend latency affecting system performance',
+          resolution: 'Refactored architecture reducing response times by 30%',
+          tech: ['C# .NET Core', 'SQL Server', 'RESTful APIs', 'Shopify API']
         },
         {
-          company: 'MobilityOne Sdn Bhd',
           role: '.NET Programmer',
-          period: 'Dec 2022 – Aug 2024',
-          summary: 'Public-facing eBilling platform handling high-volume financial transactions.',
+          company: 'MobilityOne Sdn Bhd',
+          blurb: 'Public-facing eBilling platform handling high-volume financial transactions.',
+          period: 'December 2022 – August 2024',
+          summary: 'Developed enterprise applications and automated billing systems.',
           highlights: [
-            'Designed and shipped an automated settlement system using Hangfire background jobs on .NET Core / MS SQL, reducing manual processing by 90% and bringing 85% of transactions to completion within 24 hours.',
-            'Built backend services with Clean Architecture, working closely with support and business teams to ensure transaction reliability across payment gateways.',
-            'Contributed to backend architecture and consistent transaction handling across distributed components.'
-          ]
+            'Built high-quality software architecture for enterprise applications',
+            'Created RESTful APIs for automated biller system',
+            'Optimized pending transactions by 90% through improvements'
+          ],
+          challenge: 'Payment platform integration difficulties',
+          resolution: 'Automated critical tasks improving efficiency and user satisfaction',
+          tech: ['C#', 'ASP.NET', '.NET Core', 'SQL Server', 'Automated Billing']
         },
         {
-          company: 'Prime Tech Solution Limited',
           role: 'Software Engineer',
-          period: 'Mar 2018 – Dec 2020',
-          summary: 'Dynamic software farm — full-stack delivery across distribution, government and e-commerce projects.',
+          company: 'Prime Tech Solution Limited',
+          blurb: 'A premier provider of technology-driven services.',
+          period: 'March 2018 – December 2020',
+          summary: 'Developed testable code and deployed software systems.',
           highlights: [
-            'Enhanced supply-chain transparency in the Banglalink DMS system serving 4,500 distributors and 200,000 retailers, implementing real-time updates with SignalR.',
-            'Delivered an ASP.NET MVC system for IRIDP-2, enabling government-wide infrastructure project tracking with role-based dashboards and performance analytics.',
-            'Built modular .NET Core + Angular e-commerce APIs for AARMOIRE, with CI/CD pipelines via GitHub Actions.'
-          ]
+            'Built backend APIs for .NET Core & Angular e-commerce application',
+            'Implemented Clean Architecture patterns for maintainability',
+            'Deployed software components into functional systems'
+          ],
+          challenge: 'Real-time data synchronization issues',
+          resolution: 'Implemented SignalR for improved data consistency',
+          tech: ['C#', '.NET Core', 'Angular', 'Entity Framework', 'SignalR']
         }
       ]
     }
@@ -125,42 +139,145 @@ export const ZONES: Zone[] = [
     title: 'Projects',
     enabled: true,
     payload: {
+      // Each item gets its own holographic screen; the Projects zone uses
+      // the same scroll-driven carousel as Experience (most-relevant
+      // professional work first, then web/research/AI/hardware demos).
       items: [
         {
+          category: 'Professional Work',
           name: 'AdvancePro — Inventory Management System',
-          blurb: 'Canadian SaaS for inventory, integrated with QuickBooks, Shopify and Avalara. Lean search API cut response times by 30%; Authorize.net payments for 200+ business clients.',
-          tech: ['C# .NET Core', 'REST API', 'MSSQL', 'EF Core', 'n-tier'],
-          link: 'https://aptx.ca/'
+          blurb: 'AdvancePro is a Canadian SaaS company providing inventory management solutions integrated with QuickBooks, Shopify, Avalara and other platforms. Enhanced API efficiency by doing a deep performance analysis and moving beyond strict REST conventions to design a lean, dedicated search API that returned only essential data, reducing response times by 30%. Integrated payment workflows with Authorize.net, enabling secure online transactions and automated invoice generation for 200+ active business clients.',
+          tech: ['C# .NET Core', 'REST API', 'MSSQL', 'EF Core', 'n-tier', 'Authorize.net'],
+          link: 'https://aptx.ca/',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/AdvancePro.png'
         },
         {
-          name: 'eBilling — Municipal Payment Gateway',
-          blurb: 'Public eBilling for Malaysian municipalities. Hangfire-driven automated settlement reduced pending transactions by 90% with >85% same-day completion.',
+          category: 'Professional Work',
+          name: 'eBilling System — Municipal Payment Gateway',
+          blurb: 'MobilityOne Sdn Bhd is a Malaysia-based FinTech company providing e-payment solutions for prepaid distribution and electronic transactions. Built and maintained APIs in .NET Core with MSSQL and Oracle for a public-facing eBilling system used across multiple municipalities, enabling continuous utility-bill payments. Developed an automated settlement system using Hangfire background jobs to handle 200–300 real-time daily transactions, reducing pending settlements by 90% and achieving >85% completion within 24 hours.',
           tech: ['C# .NET Core', 'Web API', 'MSSQL', 'Oracle 11g', 'Hangfire'],
-          link: 'https://www.mobilityonegroup.com/'
+          link: 'https://www.mobilityonegroup.com/',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/eBilling.png'
         },
         {
-          name: 'Banglalink DMS',
-          blurb: 'Distribution Management System serving 4,500 distributors and 200,000 retailers, with real-time SignalR updates across the supply chain.',
+          category: 'Professional Work',
+          name: 'Banglalink Distribution Management System (DMS)',
+          blurb: 'Enhanced supply-chain transparency in the Banglalink DMS serving 4,500 distributors and 200,000 retailers, implementing real-time updates with SignalR. A comprehensive web-based solution that manages supply chain and logistics activities including warehouse inventory across Distributor, RSO, Retailer and related entities. Streamlined operations and improved data consistency across the entire distribution network.',
           tech: ['ASP.NET', 'MVC', 'EF', 'Oracle 11g', 'SignalR'],
-          link: 'https://blkdms.banglalink.net/'
+          link: 'https://blkdms.banglalink.net/',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/BL_DMS.png'
         },
         {
-          name: 'AARMOIRE — E-Commerce Platform',
-          blurb: 'Modular .NET Core + Angular e-commerce APIs with inventory, loyalty and reporting modules. Clean Architecture; GitHub Actions CI/CD.',
-          tech: ['ASP.NET', 'Web API', 'EF', 'MSSQL', 'Angular'],
-          link: 'https://aarmoire.com/'
-        },
-        {
+          category: 'Professional Work',
           name: 'IRIDP-2 — Rural Infrastructure Tracking',
-          blurb: 'ASP.NET MVC system for tracking nationwide infrastructure projects with role-based dashboards and performance analytics.',
+          blurb: 'Delivered an ASP.NET MVC system for IRIDP-2, enabling the government to track infrastructure projects nationwide with role-based dashboards and performance analytics. Monitors payment logs and development of roads, bridges and culverts throughout the country. Integrated multiple APIs to streamline data flow and improve system interoperability, while implementing dynamic user roles for enhanced security and access control.',
           tech: ['ASP.NET MVC', 'EF', 'MSSQL', 'Repository Pattern'],
-          link: 'https://oldweb.lged.gov.bd/ProjectHome.aspx'
+          link: 'https://oldweb.lged.gov.bd/ProjectHome.aspx',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/IRIDP.png'
         },
         {
+          category: 'Professional Work',
+          name: 'AARMOIRE — E-Commerce Platform',
+          blurb: 'Built modular .NET Core + Angular e-commerce APIs for AARMOIRE, supporting inventory, loyalty and reporting features with CI/CD pipelines via GitHub Actions. Comprehensive e-commerce web app featuring inventory management, sales processing, e-shop functionality, admin dashboard, customer management and a loyalty program. Backend follows Clean Architecture; frontend uses Angular for a modern, responsive UX.',
+          tech: ['ASP.NET', 'Web API', 'EF', 'MSSQL', 'Angular', 'Clean Architecture'],
+          link: 'https://aarmoire.com/',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/Aarmoire.png'
+        },
+        {
+          category: 'Professional Work',
+          name: 'LKSS & LKSS-HRC Business Process Automation',
+          blurb: 'Full-stack web-based automation system for LKSS and LKSS-HRC, two government-affiliated welfare and HR organizations in Bangladesh. The solution streamlined operations across financial accounting, HR/payroll, member management and project lifecycle tracking, with a modular architecture designed for scalable automation.',
+          tech: ['ASP.NET', 'MVC', 'EF', 'MSSQL'],
+          link: 'https://www.developmentaid.org/organizations/view/106609/lkss-human-resource-center-lkss-hrc',
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/LKSS.png'
+        },
+        {
+          category: 'Web Development',
+          name: 'eCommerce Demo Platform',
+          blurb: 'A comprehensive e-commerce demonstration project showcasing modern software architecture patterns and best practices. Built with .NET Core API following Onion Architecture principles, featuring clean code structure, repository pattern implementation and robust database design with MSSQL. Demonstrates enterprise-level development methodologies.',
+          tech: ['.NET Core', 'Clean Architecture', 'MSSQL', 'Repository Pattern', 'MVC', 'C#'],
+          link: 'https://github.com/HMFarhad/eCommerce-DEMO',
+          linkLabel: 'GitHub',
+          imageUrl: 'assets/images/projects/e-commerce.jpeg'
+        },
+        {
+          category: 'Research',
+          name: 'Long-Term Engagement in Smart Home Energy Systems',
+          blurb: 'Smart home energy systems are becoming more common as tools to help people manage energy efficiently — but keeping users engaged over time remains a challenge. This study explores the gap between early use and longer-term interaction, focusing on how personalization and privacy features influence behavior. The goal: understand which design choices encourage ongoing use and build trust in energy feedback tools.',
+          tech: ['Research', 'Academic Writing', 'Data Analysis', 'Methodology'],
+          link: 'https://www.theseus.fi/handle/10024/890922',
+          linkLabel: 'View Paper',
+          imageUrl: 'assets/images/projects/VAMK.jpg'
+        },
+        {
+          category: 'Web Development',
           name: 'Voice-Enabled Semantic Flight Search (Bengali)',
-          blurb: 'Voice-powered flight search for Bengali speakers — Bengali NLP, speech-to-text, semantic search and live airline API integration.',
-          tech: ['Bengali NLP', 'Speech Recognition', 'Semantic Search', 'ML'],
-          link: 'https://github.com/HMFarhad/VoiceSearch-Bengali'
+          blurb: 'An innovative voice-powered flight search application designed for Bengali speakers, addressing the gap in native-language support for travel booking systems. Processes voice commands in Bengali, converts speech to text using advanced NLP, extracts semantic meaning from conversational queries, and integrates with multiple airline APIs to provide real-time price comparisons.',
+          tech: ['Bengali NLP', 'Speech Recognition', 'Semantic Search', 'Flight API', 'Machine Learning'],
+          link: 'https://github.com/HMFarhad/VoiceSearch-Bengali',
+          linkLabel: 'GitHub',
+          imageUrl: 'assets/images/projects/VoiceSearch.png'
+        },
+        {
+          category: 'Research',
+          name: 'Speech-to-Text Conversion for Bengali — A Review',
+          blurb: 'Comprehensive graduate research thesis analyzing automatic speech recognition (ASR) systems for Bengali. The study reviews methodologies including Mel-Frequency Cepstral Coefficients (MFCC), Hidden Markov Models (HMM) and Gaussian Mixture Models (GMM) for Bengali ASR implementation, contributing to NLP for underrepresented languages.',
+          tech: ['MFCC', 'HMM', 'GMM', 'Bengali ASR', 'Research', 'NLP'],
+          link: 'https://www.researchgate.net/publication/SPEECH_TO_TEXT_CONVERSION_FOR_BENGALI_LANGUAGE',
+          linkLabel: 'View Paper'
+        },
+        {
+          category: 'Web Development',
+          name: 'Dual Examiner System',
+          blurb: 'A sophisticated examination management platform designed to streamline academic assessment with dual-examiner workflows. Facilitates collaborative evaluation, automated student assessment tracking and comprehensive administrative oversight. Features secure authentication, role-based access control, automated grading workflows and detailed reporting.',
+          tech: ['System Design', 'Database Management', 'User Authentication', 'Assessment Tools', 'Workflow Management'],
+          link: 'https://github.com/HMFarhad/DaulExaminerSystem',
+          linkLabel: 'GitHub'
+        },
+        {
+          category: 'Computer Vision',
+          name: 'Simple OCR for Handwritten Characters',
+          blurb: 'An intelligent handwriting recognition system designed to digitize handwritten text and reduce manual typing workload. Employs morphological operations for image preprocessing, intelligent cropping for character segmentation and K-Nearest Neighbors classification for character recognition. Implemented in MATLAB, focused on practical document digitization.',
+          tech: ['MATLAB', 'Image Processing', 'KNN', 'OCR', 'Computer Vision'],
+          link: 'https://github.com/HMFarhad/Simple-OCR',
+          linkLabel: 'GitHub',
+          imageUrl: 'assets/images/projects/OCR.png'
+        },
+        {
+          category: 'Artificial Intelligence',
+          name: 'Eight Puzzle Solver',
+          blurb: 'A comprehensive AI project that implements and analyzes fundamental search algorithms to solve the classic 8-puzzle sliding-puzzle problem. Explores breadth-first search, depth-first search and heuristic-based approaches like A*. Demonstrates algorithmic problem-solving, state-space exploration and optimization techniques in AI.',
+          tech: ['AI', 'Search Algorithms', 'Heuristics', 'A* Algorithm', 'Problem Solving'],
+          imageUrl: 'assets/images/projects/EightPuzzle.png'
+        },
+        {
+          category: 'Game Development',
+          name: 'Flappy Bird using OpenGL',
+          blurb: 'Recreation of the famous Flappy Bird game using OpenGL in C++. Uses the GLUT library and standard C++ to provide a desktop gaming experience similar to the popular mobile game.',
+          tech: ['C++', 'OpenGL', 'GLUT', 'Game Development'],
+          link: 'https://github.com/HMFarhad/Flappy-Bird-using-Open-GL',
+          linkLabel: 'GitHub',
+          imageUrl: 'assets/images/projects/flappyBird.jpeg'
+        },
+        {
+          category: 'Hardware Design',
+          name: 'Design of an 8-bit Computer',
+          blurb: 'Microprocessor and I/O System project involving the complete design and simulation of an 8-bit computer system using Proteus software.',
+          tech: ['Proteus', 'Microprocessor', 'Digital Design'],
+          imageUrl: 'assets/images/projects/8bitcomputer.jpeg'
+        },
+        {
+          category: 'Hardware Design',
+          name: 'Design of a 32-bit Arithmetic Logic Unit (ALU)',
+          blurb: 'Digital Electronics course project focused on the design and implementation of a 32-bit ALU, demonstrating digital-logic and computer-architecture fundamentals.',
+          tech: ['Digital Logic', 'ALU', 'Computer Architecture'],
+          imageUrl: 'assets/images/projects/32bitcomputer.png'
         }
       ]
     }
@@ -173,21 +290,27 @@ export const ZONES: Zone[] = [
       items: [
         {
           title: 'I Built a Prompt Factory to Work Better with AI Coding Agents',
-          date: '2025',
+          date: 'May 24, 2026',
+          readTime: '9 min read',
+          tags: ['AI', 'Prompt Engineering', 'GitHub Copilot', 'Productivity', 'Software Architecture'],
           url: 'https://medium.com/@HMFarhad/i-built-a-prompt-factory-to-work-better-with-ai-coding-agents-ff98800d99dd',
-          excerpt: 'A simple workflow that turns rough developer tasks into structured prompts for AI coding agents — steering the agent before the plan exists rather than after.'
+          excerpt: 'As developers, we often have to analyze, plan, and implement features in systems we are still learning or systems that have grown complex over time. AI coding agents help a lot in this process, but the quality of the result depends heavily on the quality of the instruction. So I created a simple workflow: a prompt factory that generates a strong, structured prompt for the actual AI coding agent.'
         },
         {
-          title: 'GitHub Actions Self-Hosted Runner: Tackling Real Challenges',
-          date: 'Jul 22, 2025',
+          title: 'My Journey with GitHub Actions Self-Hosted Runner: Tackling Challenges with Automation and Persistence',
+          date: 'July 22, 2025',
+          readTime: '2 min read',
+          tags: ['GitHub Actions', 'CI/CD', 'DevOps', 'Automation', '.NET'],
           url: 'https://medium.com/@HMFarhad/my-journey-with-github-actions-self-hosted-runner-tackling-challenges-with-automation-and-810908275129',
-          excerpt: 'Setting up a self-hosted runner on Windows for a .NET project: stale services, NETWORK SERVICE permissions, .NET install failures — and a workflow that saves 10–20 min per PR.'
+          excerpt: 'As a developer passionate about optimizing workflows and solving complex problems, I recently set up a self-hosted GitHub Actions runner on my Windows machine to automate CI/CD for my .NET project. What started as a straightforward task turned into a series of challenges, but the result was worth it: a solution that saves 10–20 minutes of PR review time per pull request.'
         },
         {
-          title: 'Understanding JWT Implementation Flow — A Simple Guide for Beginners',
-          date: '2024',
-          url: 'https://medium.com/@HMFarhad',
-          excerpt: 'Step-by-step on issuing JWTs and refresh tokens, validating requests, and handling token expiry without forcing the user to log in again.'
+          title: 'Understanding JWT Implementation Flow: A Simple Guide for Beginners',
+          date: 'August 4, 2023',
+          readTime: '3 min read',
+          tags: ['JWT', 'Authentication', 'Security', 'Web Development', 'API'],
+          url: 'https://medium.com/@HMFarhad/understanding-jwt-implementation-flow-a-simple-guide-for-front-end-developers-96d122b7176d',
+          excerpt: 'JWT offers several advantages, one of which is the elimination of the necessity to query the database or authentication server for user information with each request. The efficiency and speed of JWT verification are achieved as it does not rely on database lookups.'
         }
       ]
     }

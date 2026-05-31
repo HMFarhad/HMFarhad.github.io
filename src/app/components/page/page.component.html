@@ -37,10 +37,16 @@
           <li>
             <strong>{{ i.role }}</strong> — {{ i.company }}
             <div class="muted">{{ i.period }}</div>
+            <p class="muted">{{ i.blurb }}</p>
             <p>{{ i.summary }}</p>
-            @if (i.highlights) {
-              <ul>@for (h of i.highlights; track h) { <li>{{ h }}</li> }</ul>
-            }
+            <ul>
+              @for (h of i.highlights; track h) { <li>{{ h }}</li> }
+            </ul>
+            <p><strong>Challenge:</strong> {{ i.challenge }}</p>
+            <p><strong>Resolution:</strong> {{ i.resolution }}</p>
+            <div class="tags">
+              @for (t of i.tech; track t) { <span>{{ t }}</span> }
+            </div>
           </li>
         }
       </ul>
@@ -50,9 +56,15 @@
       <ul class="cards grid">
         @for (p of z.payload.items; track p.name) {
           <li>
+            @if (p.category) { <div class="muted">{{ p.category }}</div> }
             <strong>{{ p.name }}</strong>
             <p>{{ p.blurb }}</p>
             <div class="tags">@for (t of p.tech; track t) { <span>{{ t }}</span> }</div>
+            @if (p.link) {
+              <a [href]="p.link" target="_blank" rel="noopener">
+                {{ p.linkLabel ?? 'Visit Site' }} ↗
+              </a>
+            }
           </li>
         }
       </ul>
@@ -62,9 +74,14 @@
       <ul class="cards">
         @for (b of z.payload.items; track b.title) {
           <li>
-            <a [href]="b.url"><strong>{{ b.title }}</strong></a>
-            <div class="muted">{{ b.date }}</div>
+            <a [href]="b.url" target="_blank" rel="noopener"><strong>{{ b.title }}</strong></a>
+            <div class="muted">
+              {{ b.date }}@if (b.readTime) { · {{ b.readTime }} }
+            </div>
             <p>{{ b.excerpt }}</p>
+            @if (b.tags?.length) {
+              <div class="tags">@for (t of b.tags; track t) { <span>{{ t }}</span> }</div>
+            }
           </li>
         }
       </ul>

@@ -81,6 +81,21 @@ export class ForestScene {
 
   // ---------------- public API ----------------
   addScrollDelta(d: number): void {
+    // If the user is parked at a zone whose panel owns a carousel
+    // (currently just the Experience zone), feed the scroll into the
+    // carousel first. Only the leftover delta — once the carousel has
+    // hit its last (or first) card — moves the walker along the trail.
+    if (
+      this.activeIndex >= 0 &&
+      this.landmarks &&
+      Math.abs(this.currentProgress - this.stationProgress[this.activeIndex]) < 0.04
+    ) {
+      d = this.landmarks.nudgeCarousel(this.activeIndex, d);
+      if (d === 0) {
+        this.lastScrollAt = performance.now();
+        return;
+      }
+    }
     this.targetProgress = THREE.MathUtils.clamp(this.targetProgress + d, 0, 1);
     this.lastScrollAt = performance.now();
   }
@@ -93,6 +108,23 @@ export class ForestScene {
     if (!hits.length) return null;
     const idx = hits[0].object.userData['stationIndex'];
     return typeof idx === 'number' ? idx : null;
+  }
+  /**
+   * Hit-test the holo-panel under the current pointer for a clickable
+   * region (currently just the project "Visit Site" pills). Returns the
+   * URL to open or null if no link sits under the pointer.
+   */
+  pickLink(): string | null {
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
+    for (const h of hits) {
+      if (!h.object.userData['isPanel']) continue;
+      const idx = h.object.userData['stationIndex'];
+      const uv = h.uv;
+      if (typeof idx !== 'number' || !uv) return null;
+      return this.landmarks.pickLink(idx, uv.x, uv.y);
+    }
+    return null;
   }
   jumpToStation(idx: number): void {
     if (idx < 0 || idx >= this.stationProgress.length) return;

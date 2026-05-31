@@ -94,6 +94,13 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
       const x = ((e.clientX - r.left) / r.width)  *  2 - 1;
       const y = ((e.clientY - r.top)  / r.height) * -2 + 1;
       this.scene?.setPointer(x, y);
+      // Prefer link pills on the holo-panel over a station jump so the
+      // "Visit Site" buttons feel like real buttons.
+      const url = this.scene?.pickLink();
+      if (url) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
       const idx = this.scene?.pickStation();
       if (typeof idx === 'number') this.scene?.jumpToStation(idx);
     };
