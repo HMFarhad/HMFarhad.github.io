@@ -1,0 +1,103 @@
+name: Deploy unified site to GitHub Pages
+
+# Trigger on push to either branch. Whichever pushes, we still rebuild
+# both the 3D experience (Redesign branch) and the legacy text site (main
+# branch) and publish them as one merged artifact.
+on:
+  push:
+    branches: [Redesign, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # ---------- Redesign (3D experience, becomes site root) ----------
+      - name: Checkout Redesign branch
+        uses: actions/checkout@v4
+        with:
+          ref: Redesign
+          path: redesign
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Redesign deps
+        working-directory: redesign
+        run: npm ci
+
+      - name: Build Redesign (root /)
+        working-directory: redesign
+        run: npx ng build --base-href=/
+
+      - name: Locate Redesign output
+        id: redesign_out
+        run: |
+          DIR=$(find redesign/dist -maxdepth 3 -type d -name browser | head -n 1)
+          if [ -z "$DIR" ]; then
+            DIR=$(find redesign/dist -maxdepth 3 -type d -name 'portfolio*' | head -n 1)
+          fi
+          echo "Redesign output: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      # ---------- main (legacy text site, becomes /legacy/) ----------
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: legacy
+
+      - name: Install legacy deps
+        working-directory: legacy
+        run: npm ci
+
+      - name: Build legacy (/legacy/)
+        working-directory: legacy
+        run: npx ng build --base-href=/legacy/
+
+      - name: Locate legacy output
+        id: legacy_out
+        run: |
+          DIR=$(find legacy/dist -maxdepth 3 -type d -name browser | head -n 1)
+          if [ -z "$DIR" ]; then
+            DIR=$(find legacy/dist -maxdepth 3 -mindepth 2 -type d | head -n 1)
+          fi
+          echo "Legacy output: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      # ---------- Merge ----------
+      - name: Merge outputs into _site
+        run: |
+          mkdir -p _site
+          cp -r "${{ steps.redesign_out.outputs.dir }}/." _site/
+          mkdir -p _site/legacy
+          cp -r "${{ steps.legacy_out.outputs.dir }}/." _site/legacy/
+          cp _site/index.html _site/404.html
+          touch _site/.nojekyll
+          echo "--- top of _site ---"
+          ls -la _site
+          echo "--- _site/legacy ---"
+          ls -la _site/legacy
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

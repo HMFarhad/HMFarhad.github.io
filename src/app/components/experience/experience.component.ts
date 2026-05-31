@@ -3,14 +3,13 @@ import {
   PLATFORM_ID, NgZone, inject, signal
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { ACTIVE_ZONES } from '../../core/content/zones';
 import type { Zone } from '../../core/content/zone.model';
 
 @Component({
   selector: 'app-experience',
   standalone: true,
-  imports: [RouterLink],
+  imports: [],
   host: { ngSkipHydration: 'true' },
   templateUrl: './experience.component.html',
   styleUrl: './experience.component.scss'
