@@ -1,71 +1,152 @@
-import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
-
-interface Experience {
-  position: string;
-  company: string;
-  duration: string;
-  description: string;
-  achievements: string[];
-  challenges?: string;
-  improvements?: string;
-  technologies: string[];
-  icon: string;
-}
+import {
+  Component, AfterViewInit, OnDestroy, ElementRef, ViewChild,
+  PLATFORM_ID, NgZone, inject, signal
+} from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { ACTIVE_ZONES } from '../../core/content/zones';
+import type { Zone } from '../../core/content/zone.model';
 
 @Component({
   selector: 'app-experience',
   standalone: true,
-  imports: [CommonModule],
+  imports: [RouterLink],
+  host: { ngSkipHydration: 'true' },
   templateUrl: './experience.component.html',
   styleUrl: './experience.component.scss'
 })
-export class ExperienceComponent {
-  experiences: Experience[] = [
-    {
-      position: 'Software Engineer (Freelance)',
-      company: 'AdvancePro Technologies',
-      duration: 'January 2023 – Present',
-      description: 'Leading backend development of AdvancePro inventory management system.',
-      achievements: [
-        'Developed complete backend architecture with optimized performance',
-        'Built robust RESTful APIs for third-party integrations',
-        'Integrated with Shopify, Avalara, and other major platforms'
-      ],
-      challenges: 'Backend latency affecting system performance',
-      improvements: 'Refactored architecture reducing response times by 30%',
-      technologies: ['C#', '.NET Core', 'SQL Server', 'RESTful APIs', 'Shopify API'],
-      icon: 'fas fa-rocket'
-    },
-    {
-      position: '.NET Programmer',
-      company: 'MobilityOne Sdn Bhd',
-      duration: 'December 2022 – August 2024',
-      description: 'Developed enterprise applications and automated billing systems.',
-      achievements: [
-        'Built high-quality software architecture for enterprise applications',
-        'Created RESTful APIs for automated biller system',
-        'Optimized pending transactions by 90% through improvements'
-      ],
-      challenges: 'Payment platform integration difficulties',
-      improvements: 'Automated critical tasks improving efficiency and user satisfaction',
-      technologies: ['C#', 'ASP.NET', '.NET Core', 'SQL Server', 'Automated Billing'],
-      icon: 'fas fa-code'
-    },
-    {
-      position: 'Software Engineer',
-      company: 'Prime Tech Solution Limited',
-      duration: 'March 2018 – December 2020',
-      description: 'Developed testable code and deployed software systems.',
-      achievements: [
-        'Built backend APIs for .NET Core & Angular e-commerce application',
-        'Implemented Clean Architecture patterns for maintainability',
-        'Deployed software components into functional systems'
-      ],
-      challenges: 'Real-time data synchronization issues',
-      improvements: 'Implemented SignalR for improved data consistency',
-      technologies: ['C#', '.NET Core', 'Angular', 'Entity Framework', 'SignalR'],
-      icon: 'fas fa-laptop-code'
-    }
-  ];
+export class ExperienceComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+
+  private platformId = inject(PLATFORM_ID);
+  private zone       = inject(NgZone);
+
+  private scene: any = null;
+  private detachInput: (() => void) | null = null;
+
+  zones: Zone[] = ACTIVE_ZONES;
+  activeIndex = signal(0);
+  hoverIndex  = signal<number | null>(null);
+  showHint    = signal(true);
+
+  ngAfterViewInit(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+
+    // Run three.js outside Angular zone so its rAF loop doesn't trigger CD.
+    this.zone.runOutsideAngular(() => {
+      // Defer one frame so hydration finishes before WebGL binds the canvas.
+      requestAnimationFrame(async () => {
+        const { ForestScene } = await import('../../three/forest-scene');
+        const canvas = this.canvasRef.nativeElement;
+        this.scene = new ForestScene(canvas, ACTIVE_ZONES.length);
+
+        this.scene.onActiveZoneChange = (idx: number) => {
+          // Bring back into zone for signal -> view.
+          this.zone.run(() => this.activeIndex.set(idx));
+        };
+        this.scene.onLandmarkHover = (idx: number | null) => {
+          this.zone.run(() => this.hoverIndex.set(idx));
+        };
+
+        this.detachInput = this.attachInput(canvas);
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.detachInput?.();
+    this.scene?.dispose?.();
+    this.scene = null;
+  }
+
+  // ---------------- input ----------------
+  private attachInput(canvas: HTMLCanvasElement): () => void {
+    const scrollRange = 9000;
+    const touchMul    = 1.2;
+
+    let touchY: number | null = null;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      this.showHint.set(false);
+      this.scene?.addScrollDelta(e.deltaY / scrollRange);
+    };
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? null; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null) return;
+      const y = e.touches[0]?.clientY;
+      if (y == null) return;
+      e.preventDefault();
+      this.showHint.set(false);
+      const dy = touchY - y;
+      touchY = y;
+      this.scene?.addScrollDelta((dy * touchMul) / scrollRange);
+    };
+    const onTouchEnd = () => { touchY = null; };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width)  *  2 - 1;
+      const y = ((e.clientY - r.top)  / r.height) * -2 + 1;
+      this.scene?.setPointer(x, y);
+    };
+    const onClick = (e: MouseEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width)  *  2 - 1;
+      const y = ((e.clientY - r.top)  / r.height) * -2 + 1;
+      this.scene?.setPointer(x, y);
+      const idx = this.scene?.pickStation();
+      if (typeof idx === 'number') this.scene?.jumpToStation(idx);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const last = this.zones.length - 1;
+      const cur  = this.activeIndex();
+      switch (e.key) {
+        case 'PageDown':
+        case 'ArrowDown':
+        case 'ArrowRight':
+          e.preventDefault();
+          this.scene?.jumpToStation(Math.min(last, cur + 1));
+          break;
+        case 'PageUp':
+        case 'ArrowUp':
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.scene?.jumpToStation(Math.max(0, cur - 1));
+          break;
+        case 'Home':
+          e.preventDefault();
+          this.scene?.jumpToStation(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          this.scene?.jumpToStation(last);
+          break;
+      }
+    };
+
+    canvas.addEventListener('wheel',      onWheel,      { passive: false });
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true  });
+    canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',   onTouchEnd,   { passive: true  });
+    canvas.addEventListener('mousemove',  onMouseMove);
+    canvas.addEventListener('click',      onClick);
+    window.addEventListener('keydown',    onKey);
+
+    return () => {
+      canvas.removeEventListener('wheel',      onWheel);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove',  onTouchMove);
+      canvas.removeEventListener('touchend',   onTouchEnd);
+      canvas.removeEventListener('mousemove',  onMouseMove);
+      canvas.removeEventListener('click',      onClick);
+      window.removeEventListener('keydown',    onKey);
+    };
+  }
+
+  // Helper for HUD: zone title at index.
+  zoneTitle(i: number | null): string | null {
+    if (i == null || i < 0 || i >= this.zones.length) return null;
+    return this.zones[i].title;
+  }
 }

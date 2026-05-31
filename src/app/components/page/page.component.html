@@ -1,0 +1,86 @@
+@for (z of zones; track z.id) {
+  <section class="zone" [attr.id]="z.id">
+    <header><h2>{{ z.title }}</h2></header>
+
+    @if (isAbout(z) && z.id === 'about') {
+      <p class="lead">{{ z.payload.tagline }}</p>
+      <h3>{{ z.payload.name }}</h3>
+      <p>{{ z.payload.bio }}</p>
+    }
+
+    @if (isEducation(z) && z.id === 'education') {
+      <ul class="cards">
+        @for (i of z.payload.items; track i.institution) {
+          <li>
+            <strong>{{ i.institution }}</strong>
+            <div>{{ i.degree }} · {{ i.period }}</div>
+            @if (i.details) { <p>{{ i.details }}</p> }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isSkills(z) && z.id === 'skills') {
+      <div class="skills">
+        @for (g of z.payload.groups; track g.name) {
+          <div class="skill-group">
+            <h4>{{ g.name }}</h4>
+            <ul>@for (s of g.items; track s) { <li>{{ s }}</li> }</ul>
+          </div>
+        }
+      </div>
+    }
+
+    @if (isExperience(z) && z.id === 'experience') {
+      <ul class="cards">
+        @for (i of z.payload.items; track i.company) {
+          <li>
+            <strong>{{ i.role }}</strong> — {{ i.company }}
+            <div class="muted">{{ i.period }}</div>
+            <p>{{ i.summary }}</p>
+            @if (i.highlights) {
+              <ul>@for (h of i.highlights; track h) { <li>{{ h }}</li> }</ul>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isProjects(z) && z.id === 'projects') {
+      <ul class="cards grid">
+        @for (p of z.payload.items; track p.name) {
+          <li>
+            <strong>{{ p.name }}</strong>
+            <p>{{ p.blurb }}</p>
+            <div class="tags">@for (t of p.tech; track t) { <span>{{ t }}</span> }</div>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isBlogs(z) && z.id === 'blogs') {
+      <ul class="cards">
+        @for (b of z.payload.items; track b.title) {
+          <li>
+            <a [href]="b.url"><strong>{{ b.title }}</strong></a>
+            <div class="muted">{{ b.date }}</div>
+            <p>{{ b.excerpt }}</p>
+          </li>
+        }
+      </ul>
+    }
+
+    @if (isContact(z) && z.id === 'contact') {
+      <p>Email: <a [href]="'mailto:' + z.payload.email">{{ z.payload.email }}</a></p>
+      <ul class="links">
+        @for (l of z.payload.links; track l.url) {
+          <li><a [href]="l.url" target="_blank" rel="noopener">{{ l.label }}</a></li>
+        }
+      </ul>
+    }
+  </section>
+}
+
+<footer class="page-footer">
+  <a routerLink="/experience">Try the immersive 3D experience →</a>
+</footer>
