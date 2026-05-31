@@ -65,9 +65,12 @@ export function buildStationLandmarks(
 function makeHoloScreen(zone: Zone): THREE.Group {
   const g = new THREE.Group();
 
-  const screenW = 5.4;
-  const screenH = 3.15;
-  const screenY = 2.4; // floats at eye level
+  // Expanded by 15% on left/right/bottom vs. the original 5.4 x 3.15
+  // panel, while the top edge stays anchored at its previous height.
+  // Original top edge: 2.4 + 3.15/2 = 3.975 world units.
+  const screenW = 5.4 * 1.30;          // +15% each side -> +30% width
+  const screenH = 3.15 * 1.15;         // +15% only on the bottom
+  const screenY = 3.975 - screenH / 2; // keep top edge fixed
 
   // ---- ground projector: subtle cyan disc on the floor ----
   const projTex = makeProjectorDiscTexture();
@@ -225,7 +228,10 @@ function makeScreenHaloTexture(w = 256, h = 192): THREE.CanvasTexture {
  * darker pixels disappear and the light pixels glow against the forest.
  */
 function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
-  const W = 1536, H = 896;
+  // Canvas scaled to match the expanded plane (1.30x wide, 1.15x tall)
+  // so text isn't stretched. Original was 1536 x 896.
+  const W = Math.round(1536 * 1.30); // 1997
+  const H = Math.round(896 * 1.15);  // 1030
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d')!;
@@ -291,7 +297,7 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   // Body content (zone-typed). Color values are kept for compatibility but
   // the override above paints every line white with a navy outline.
   const bodyX = 64;
-  let y = 150;
+  let y = 180;
   const accent  = 'rgba(0, 90, 200, 1.0)';
   const primary = 'rgba(6, 24, 80, 1.0)';
   const muted   = 'rgba(15, 40, 110, 1.0)';
@@ -310,67 +316,90 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   switch (zone.id) {
     case 'about': {
       ctx.fillStyle = primary;
-      ctx.font = '600 64px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText(zone.payload.name, bodyX, y); y += 80;
+      ctx.font = '700 80px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText(zone.payload.name, bodyX, y); y += 92;
       ctx.fillStyle = accent;
-      wrap(zone.payload.tagline, 'italic 600 32px "Segoe UI", system-ui, sans-serif', 44, W - bodyX - 80);
-      y += 20;
+      wrap(zone.payload.tagline, 'italic 600 45px "Segoe UI", system-ui, sans-serif', 52, W - bodyX - 80);
+      y += 30;
       ctx.fillStyle = muted;
-      wrap(zone.payload.bio, '400 28px "Segoe UI", system-ui, sans-serif', 40, W - bodyX - 80);
+      // bio is split into paragraphs on blank lines so each paragraph
+      // wraps independently with a small gap, matching the HTML page.
+      const paragraphs = zone.payload.bio.split(/\n\s*\n/);
+      for (let i = 0; i < paragraphs.length; i++) {
+        wrap(paragraphs[i], '500 40px "Segoe UI", system-ui, sans-serif', 46, W - bodyX - 80);
+        if (i < paragraphs.length - 1) y += 22;
+      }
       break;
     }
     case 'education': {
       for (const it of zone.payload.items) {
+        // Extra breathing room before the Languages section.
+        if (it.institution.toLowerCase().startsWith('language')) y += 32;
         ctx.fillStyle = primary;
-        ctx.font = '700 36px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(it.institution, bodyX, y); y += 46;
+        ctx.font = '700 46px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(it.institution, bodyX, y); y += 56;
         ctx.fillStyle = accent;
-        ctx.font = '600 26px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(`${it.degree} · ${it.period}`, bodyX, y); y += 38;
+        const head = it.period ? `${it.degree} · ${it.period}` : it.degree;
+        wrap(head, '600 34px "Segoe UI", system-ui, sans-serif', 44, W - bodyX - 80);
         if (it.details) {
           ctx.fillStyle = muted;
-          wrap(it.details, '400 24px "Segoe UI", system-ui, sans-serif', 34, W - bodyX - 80);
+          wrap(it.details, '400 32px "Segoe UI", system-ui, sans-serif', 42, W - bodyX - 80);
         }
-        y += 24;
+        y += 22;
         if (y > H - 90) break;
       }
       break;
     }
     case 'skills': {
-      const groups = zone.payload.groups.slice(0, 3);
-      const colW = (W - bodyX - 80) / Math.max(1, groups.length);
-      let cx = bodyX;
-      for (const grp of groups) {
-        let cy = y;
+      // 3 columns x 2 rows (up to 6 groups).
+      const groups = zone.payload.groups.slice(0, 6);
+      const cols = 3;
+      const colW = (W - bodyX - 80) / cols;
+      const rowTop0 = y;
+      const rowTop1 = y + (H - y - 90) / 2;
+      for (let i = 0; i < groups.length; i++) {
+        const grp = groups[i];
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const cx = bodyX + col * colW;
+        let cy = row === 0 ? rowTop0 : rowTop1;
         ctx.fillStyle = primary;
-        ctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(grp.name, cx, cy); cy += 44;
+        ctx.font = '700 38px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(grp.name, cx, cy); cy += 50;
         ctx.fillStyle = muted;
-        ctx.font = '500 24px "Segoe UI", system-ui, sans-serif';
+        ctx.font = '500 28px "Segoe UI", system-ui, sans-serif';
         for (const s of grp.items) {
           if (cy > H - 80) break;
-          ctx.fillText('› ' + s, cx, cy); cy += 34;
+          // Wrap each bullet to column width.
+          const lines = wrapText(ctx, '› ' + s, colW - 16);
+          for (const ln of lines) {
+            if (cy > H - 80) break;
+            ctx.fillText(ln, cx, cy); cy += 36;
+          }
         }
-        cx += colW;
       }
       break;
     }
     case 'experience': {
       for (const it of zone.payload.items) {
         ctx.fillStyle = primary;
-        ctx.font = '700 32px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(`${it.role} — ${it.company}`, bodyX, y); y += 42;
+        ctx.font = '700 36px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(`${it.role} — ${it.company}`, bodyX, y); y += 44;
         ctx.fillStyle = accent;
-        ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(it.period, bodyX, y); y += 34;
+        ctx.font = '600 26px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(it.period, bodyX, y); y += 36;
         ctx.fillStyle = muted;
-        wrap(it.summary, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
+        wrap(it.summary, '400 26px "Segoe UI", system-ui, sans-serif', 34, W - bodyX - 80);
         if (it.highlights) {
-          for (const h of it.highlights.slice(0, 3)) {
+          for (const h of it.highlights) {
             if (y > H - 80) break;
             ctx.fillStyle = dim;
-            ctx.font = '400 22px "Segoe UI", system-ui, sans-serif';
-            ctx.fillText('› ' + h, bodyX + 18, y); y += 30;
+            const lines = wrapText(ctx, '› ' + h, W - bodyX - 100);
+            for (const ln of lines) {
+              if (y > H - 80) break;
+              ctx.font = '400 25px "Segoe UI", system-ui, sans-serif';
+              ctx.fillText(ln, bodyX + 18, y); y += 32;
+            }
           }
         }
         y += 18;
@@ -382,14 +411,14 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
       const items = zone.payload.items.slice(0, 3);
       for (const p of items) {
         ctx.fillStyle = primary;
-        ctx.font = '700 32px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(p.name, bodyX, y); y += 42;
+        ctx.font = '700 42px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(p.name, bodyX, y); y += 52;
         ctx.fillStyle = muted;
-        wrap(p.blurb, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
+        wrap(p.blurb, '400 32px "Segoe UI", system-ui, sans-serif', 40, W - bodyX - 80);
         ctx.fillStyle = accent;
-        ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(p.tech.join(' · '), bodyX, y); y += 32;
-        y += 12;
+        ctx.font = '600 26px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(p.tech.join(' · '), bodyX, y); y += 38;
+        y += 14;
         if (y > H - 90) break;
       }
       break;
@@ -397,30 +426,30 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
     case 'blogs': {
       for (const b of zone.payload.items) {
         ctx.fillStyle = primary;
-        ctx.font = '700 30px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(b.title, bodyX, y); y += 40;
+        ctx.font = '700 40px "Segoe UI", system-ui, sans-serif';
+        wrap(b.title, '700 40px "Segoe UI", system-ui, sans-serif', 50, W - bodyX - 80);
         ctx.fillStyle = accent;
-        ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
-        ctx.fillText(b.date, bodyX, y); y += 32;
+        ctx.font = '600 30px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText(b.date, bodyX, y); y += 40;
         ctx.fillStyle = muted;
-        wrap(b.excerpt, '400 24px "Segoe UI", system-ui, sans-serif', 32, W - bodyX - 80);
-        y += 18;
+        wrap(b.excerpt, '400 32px "Segoe UI", system-ui, sans-serif', 40, W - bodyX - 80);
+        y += 24;
         if (y > H - 90) break;
       }
       break;
     }
     case 'contact': {
       ctx.fillStyle = primary;
-      ctx.font = '600 44px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText('Get in touch', bodyX, y); y += 64;
+      ctx.font = '600 60px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('Get in touch', bodyX, y); y += 80;
       ctx.fillStyle = accent;
-      ctx.font = '600 32px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText(zone.payload.email, bodyX, y); y += 56;
+      ctx.font = '600 42px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText(zone.payload.email, bodyX, y); y += 64;
       ctx.fillStyle = muted;
-      ctx.font = '400 26px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '400 34px "Segoe UI", system-ui, sans-serif';
       for (const l of zone.payload.links) {
         if (y > H - 80) break;
-        ctx.fillText(`› ${l.label}`, bodyX, y); y += 38;
+        ctx.fillText(`› ${l.label}`, bodyX, y); y += 46;
       }
       break;
     }
@@ -428,11 +457,11 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
 
   // ---- footer hairline + scroll cue ----
   ctx.fillStyle = 'rgba(20, 70, 160, 0.55)';
-  ctx.fillRect(40, H - 64, W - 80, 1);
+  ctx.fillRect(40, H - 80, W - 80, 1);
   ctx.fillStyle = 'rgba(10, 40, 110, 0.95)';
   ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 46);
+  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
   ctx.textAlign = 'left';
 
   const tex = new THREE.CanvasTexture(canvas);

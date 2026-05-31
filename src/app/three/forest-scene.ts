@@ -203,8 +203,13 @@ export class ForestScene {
     // ease progress
     this.currentProgress += (this.targetProgress - this.currentProgress) * (1 - Math.exp(-SCROLL_EASE * dt));
 
-    // snap when idle
-    if (now - this.lastScrollAt > SNAP_IDLE_MS) {
+    // snap when idle — but only once we're already close to our intended
+    // target. Otherwise a long jump (e.g. mini-map click) gets short-circuited
+    // and snaps to whichever station the ease happens to be passing.
+    if (
+      now - this.lastScrollAt > SNAP_IDLE_MS &&
+      Math.abs(this.currentProgress - this.targetProgress) < SNAP_THRESHOLD
+    ) {
       let nearest = this.stationProgress[0];
       let bestD = Infinity;
       for (const sp of this.stationProgress) {

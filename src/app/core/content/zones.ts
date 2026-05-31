@@ -6,9 +6,15 @@ export const ZONES: Zone[] = [
     title: 'About',
     enabled: true,
     payload: {
-      name: 'Hossain MD Farhad',
-      tagline: 'Full Stack Web Developer · Software Engineer',
-      bio: 'Recent M.Eng. graduate in Cloud-based Software Engineering with 4+ years building robust web applications — inventory systems, e-commerce platforms, automated billing, and large-scale API integrations. Passionate about efficient, scalable solutions that combine technical excellence with user-centric design. Based in Helsinki, Finland.'
+      name: 'Hossain Mohammad Farhad',
+      tagline: 'Full Stack Web Developer | C# .NET Core, Angular, MSSQL | Scalable API & Cloud Solutions',
+      // Paragraphs are separated by blank lines. The HTML page renders this
+      // with `white-space: pre-line`; the 3D landmark in landmarks.ts splits
+      // on the same blank-line marker to lay out one paragraph at a time.
+      bio:
+        "If you're scanning for a rockstar developer, you can stop here. That's not me. I'm a regular engineer who shows up every day and moves forward in small, consistent steps. Progress, for me, is a straight line drawn slowly, not a spike on a chart.\n\n" +
+        "When I face a new problem, my first attempt is rarely the clever shortcut. More often, it's the longer, more obvious path, the one that actually gets me to a working result. Only after that does the real work begin: going back, questioning every choice, and reshaping the solution until it's something I'd be comfortable defending. Optimization isn't an afterthought for me. It's the second half of the job.\n\n" +
+        "I'm not a jack of all trades, and I don't pretend to be. But when a project needs it, I can deep dive into the specifics faster than I used to, thanks to AI as a learning tool. If the team needs someone to take on something unfamiliar, I'm happy to be that person and get up to speed quickly."
     }
   },
   {
@@ -21,13 +27,19 @@ export const ZONES: Zone[] = [
           institution: 'Vaasa University of Applied Science (VAMK)',
           degree: 'M.Eng. — Cloud-based Software Engineering',
           period: '2025',
-          details: 'Vaasa, Finland. Thesis on long-term user engagement in smart-home energy systems.'
+          details: 'Vaasa, Finland.'
         },
         {
-          institution: 'University of Dhaka (DU)',
-          degree: 'M.Sc. — Information Technology',
-          period: '2023',
+          institution: 'American International University Bangladesh (AIUB)',
+          degree: 'B.Sc. — Computer Science and Engineering',
+          period: '2018',
           details: 'Dhaka, Bangladesh.'
+        },
+        {
+          institution: 'Languages',
+          degree: 'Bengali — Native  ·  English — Advanced (TOEFL 96/120)  ·  Finnish — Actively learning',
+          period: '',
+          details: ''
         }
       ]
     }
@@ -40,15 +52,27 @@ export const ZONES: Zone[] = [
       groups: [
         {
           name: 'Backend',
-          items: ['C# / .NET Core', 'ASP.NET MVC', 'Web API', 'Entity Framework', 'Clean Architecture']
+          items: ['C#', 'ASP.NET', 'ASP.NET MVC', 'Web API', '.NET Core', 'EF Core', 'Entity Framework']
         },
         {
           name: 'Frontend',
-          items: ['Angular 15+', 'TypeScript', 'JavaScript', 'RxJS', 'Bootstrap']
+          items: ['Angular', 'TypeScript', 'JavaScript']
         },
         {
-          name: 'Data & DevOps',
-          items: ['SQL Server / T-SQL', 'Oracle 11g', 'MySQL', 'GitHub Actions', 'Hangfire']
+          name: 'Databases',
+          items: ['MSSQL', 'Oracle 11g']
+        },
+        {
+          name: 'Practices',
+          items: ['REST API design', 'Clean Architecture', 'n-tier', 'MVC', 'OOP', 'Unit & integration testing']
+        },
+        {
+          name: 'Tooling',
+          items: ['Git', 'GitHub Actions (CI/CD)', 'JIRA', 'HanSoft', 'Agile / Scrum', 'AI-assisted development']
+        },
+        {
+          name: 'Communication',
+          items: ['Stakeholder collaboration', 'Code reviews', 'Technical documentation']
         }
       ]
     }
@@ -61,35 +85,36 @@ export const ZONES: Zone[] = [
       items: [
         {
           company: 'AdvancePro Technologies',
-          role: 'Senior Software Engineer (Freelance)',
-          period: 'Jan 2023 – Present',
-          summary: 'Backend architecture for a Canadian SaaS inventory platform integrated with QuickBooks, Shopify and Avalara.',
+          role: 'Software Engineer (Freelance)',
+          period: 'Jan 2023 – Sep 2025',
+          summary: 'Canadian SaaS inventory management platform integrated with Shopify, WooCommerce and QuickBooks.',
           highlights: [
-            'Reduced search API response times by 30% via lean dedicated endpoints',
-            'Integrated Authorize.net payments for 200+ active business clients',
-            'Built robust RESTful APIs for third-party integrations'
+            'Designed and optimized backend REST APIs in C#, .NET Core and EF Core, supporting real-time inventory and order operations for 200+ active business clients.',
+            'Identified bottlenecks in an existing API surface and redesigned endpoints beyond strict REST conventions, reducing response times by ~30% under peak load.',
+            'Delivered reliable data synchronization across multiple external systems, ensuring consistency for inventory, orders and financial data.',
+            'Contributed to code reviews and refactoring, improving maintainability and reducing production issues.'
           ]
         },
         {
           company: 'MobilityOne Sdn Bhd',
-          role: 'Senior .NET Programmer',
+          role: '.NET Programmer',
           period: 'Dec 2022 – Aug 2024',
-          summary: 'Public-facing eBilling system used across multiple Malaysian municipalities for utility payments.',
+          summary: 'Public-facing eBilling platform handling high-volume financial transactions.',
           highlights: [
-            'Automated settlement via Hangfire for 200–300 daily real-time transactions',
-            'Reduced pending settlements by 90%; >85% completion within 24 hours',
-            'Maintained APIs across MSSQL and Oracle 11g'
+            'Designed and shipped an automated settlement system using Hangfire background jobs on .NET Core / MS SQL, reducing manual processing by 90% and bringing 85% of transactions to completion within 24 hours.',
+            'Built backend services with Clean Architecture, working closely with support and business teams to ensure transaction reliability across payment gateways.',
+            'Contributed to backend architecture and consistent transaction handling across distributed components.'
           ]
         },
         {
           company: 'Prime Tech Solution Limited',
           role: 'Software Engineer',
-          period: 'Mar 2018 – Dec 2022',
-          summary: 'Full-stack delivery on .NET Core + Angular for e-commerce, distribution, and government projects.',
+          period: 'Mar 2018 – Dec 2020',
+          summary: 'Dynamic software farm — full-stack delivery across distribution, government and e-commerce projects.',
           highlights: [
-            'Banglalink DMS: real-time SignalR for 4,500 distributors and 200,000 retailers',
-            'AARMOIRE: modular Clean-Architecture e-commerce APIs with GitHub Actions CI/CD',
-            'IRIDP-2: nationwide infrastructure tracking with role-based dashboards'
+            'Enhanced supply-chain transparency in the Banglalink DMS system serving 4,500 distributors and 200,000 retailers, implementing real-time updates with SignalR.',
+            'Delivered an ASP.NET MVC system for IRIDP-2, enabling government-wide infrastructure project tracking with role-based dashboards and performance analytics.',
+            'Built modular .NET Core + Angular e-commerce APIs for AARMOIRE, with CI/CD pipelines via GitHub Actions.'
           ]
         }
       ]

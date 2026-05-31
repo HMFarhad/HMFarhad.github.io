@@ -5,7 +5,7 @@
     @if (isAbout(z) && z.id === 'about') {
       <p class="lead">{{ z.payload.tagline }}</p>
       <h3>{{ z.payload.name }}</h3>
-      <p>{{ z.payload.bio }}</p>
+      <p class="about-bio">{{ z.payload.bio }}</p>
     }
 
     @if (isEducation(z) && z.id === 'education') {

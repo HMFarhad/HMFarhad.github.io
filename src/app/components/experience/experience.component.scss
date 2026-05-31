@@ -92,3 +92,95 @@
 .contact-pill.primary:hover {
   background: rgba(255, 235, 180, 1);
 }
+
+.mini-map {
+  position: absolute;
+  top: 50%;
+  right: 1.25rem;
+  transform: translateY(-50%);
+  pointer-events: auto;
+  z-index: 4;
+  font: 13px/1 system-ui, "Segoe UI", sans-serif;
+  color: #f0ece2;
+
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: .65rem .75rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    background: rgba(8, 18, 28, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 14px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
+  }
+
+  li { margin: 0; }
+
+  button {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    display: grid;
+    grid-template-columns: 14px 28px 1fr;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .55rem;
+    border-radius: 999px;
+    opacity: .68;
+    transition: opacity .15s ease, background .15s ease, transform .15s ease;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, .55);
+  }
+
+  button:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(240, 236, 226, 0.55);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, .25);
+    justify-self: center;
+  }
+
+  .num {
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: .08em;
+    opacity: .7;
+  }
+
+  .lbl {
+    font-weight: 500;
+    letter-spacing: .03em;
+    white-space: nowrap;
+  }
+
+  li.active button {
+    opacity: 1;
+    background: rgba(255, 220, 140, 0.22);
+  }
+  li.active .dot {
+    background: rgba(255, 220, 140, 1);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, .35), 0 0 10px rgba(255, 220, 140, .85);
+  }
+  li.active .lbl { font-weight: 700; }
+}
+
+@media (max-width: 640px) {
+  .mini-map {
+    right: .5rem;
+    font-size: 12px;
+    .lbl { display: none; }
+    button { grid-template-columns: 14px 28px; }
+  }
+}

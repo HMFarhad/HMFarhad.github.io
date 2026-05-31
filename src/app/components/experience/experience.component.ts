@@ -156,6 +156,11 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
     return !!z && z.id === 'contact';
   }
 
+  /** Navigate to a zone via the mini-map. */
+  goToZone(i: number): void {
+    this.scene?.jumpToStation?.(i);
+  }
+
   /** Email + clickable links to render as a real DOM overlay. */
   contactLinks(): { email: string; links: { label: string; url: string }[] } | null {
     const z = this.zones.find((zz) => zz.id === 'contact');

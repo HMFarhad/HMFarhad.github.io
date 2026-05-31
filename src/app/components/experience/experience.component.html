@@ -9,6 +9,24 @@
     <a class="escape" routerLink="/page">Skip to text version</a>
   </header>
 
+  <nav class="mini-map" role="navigation" aria-label="Zone navigation">
+    <ol>
+      @for (z of zones; track z.id; let i = $index) {
+        <li
+          [class.active]="activeIndex() === i"
+          (mouseenter)="hoverIndex.set(i)"
+          (mouseleave)="hoverIndex.set(null)"
+        >
+          <button type="button" (click)="goToZone(i)">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="num">{{ (i + 1).toString().padStart(2, '0') }}</span>
+            <span class="lbl">{{ z.title }}</span>
+          </button>
+        </li>
+      }
+    </ol>
+  </nav>
+
   @if (showHint()) {
     <div class="hint" aria-hidden="true">
       <span>Scroll · drag · arrow keys to walk the path</span>
