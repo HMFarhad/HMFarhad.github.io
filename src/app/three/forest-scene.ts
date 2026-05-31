@@ -4,7 +4,7 @@ import { buildLighting }       from './world/sky';
 import { buildGround }         from './world/ground';
 import { Forest }              from './world/forest';
 import { GodRays }             from './world/godrays';
-import { buildStationLandmarks } from './world/landmarks';
+import { buildStationLandmarks, type StationLandmarksHandle } from './world/landmarks';
 import { ACTIVE_ZONES }        from '../core/content/zones';
 
 const SCROLL_EASE    = 1.6;
@@ -27,7 +27,7 @@ export class ForestScene {
 
   private forest!: Forest;
   private godRays!: GodRays;
-  private landmarks!: THREE.Group;
+  private landmarks!: StationLandmarksHandle;
 
   // scroll state
   private targetProgress  = 0;
@@ -60,7 +60,7 @@ export class ForestScene {
     buildLighting(this.scene);
 
     this.landmarks = buildStationLandmarks(ACTIVE_ZONES, this.stationProgress, this.curve);
-    this.scene.add(this.landmarks);
+    this.scene.add(this.landmarks.group);
 
     this.scene.add(buildGround(400));
 
@@ -89,7 +89,7 @@ export class ForestScene {
   }
   pickStation(): number | null {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.landmarks, true);
+    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
     if (!hits.length) return null;
     const idx = hits[0].object.userData['stationIndex'];
     return typeof idx === 'number' ? idx : null;
@@ -235,10 +235,11 @@ export class ForestScene {
 
     this.forest.update(dt);
     this.godRays.update(dt);
+    this.landmarks.update(dt, this.activeIndex);
 
     // hover detect
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.landmarks, true);
+    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
     const hoverIdx = hits.length ? (hits[0].object.userData['stationIndex'] ?? null) : null;
     this.onLandmarkHover?.(typeof hoverIdx === 'number' ? hoverIdx : null);
 

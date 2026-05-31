@@ -7,47 +7,57 @@ import type { Zone } from '../../core/content/zone.model';
  *
  * Composition per station:
  *   - A faint cyan ground projector ring (just a glow disc).
- *   - A holographic "screen" plane: transparent canvas with cyan grid,
- *     scanlines, corner brackets, and emissive HUD text rendered from
- *     the zone's content.
+ *   - A holographic "screen" plane: dark-glass backdrop + frame, plus a
+ *     compositor canvas that animates a natural rainfall of 0/1 glyphs.
+ *     Drops fall top-to-bottom at random speeds, sizes and x-positions.
+ *     Where each drop passes a text pixel it "writes" or "washes" it,
+ *     giving a build / dissolve effect.
  *   - A second additive-blended copy slightly behind for bloom/halo.
+ *
+ * State machine per station, driven by the active station index:
+ *   - empty     : no text on the panel; light ambient rainfall plays.
+ *   - building  : station is active and not fully written — rain heads
+ *                 sweep down and reveal the text behind them.
+ *   - built     : station is fully written; rain still falls lightly.
+ *   - dissolving: walker has just left this station — rain washes the
+ *                 text away from top to bottom; once gone, panel is
+ *                 marked empty again, ready for a fresh rebuild.
  *
  * No solid frames, no pedestals, no support posts — the screen reads as
  * a holo-projection. All descendants carry `userData.stationIndex` so
  * the raycaster attributes hits to the right zone.
  */
+
+export interface StationLandmarksHandle {
+  group: THREE.Group;
+  /** Drive per-station rain. Call once per frame. */
+  update(dt: number, activeIdx: number): void;
+}
+
 export function buildStationLandmarks(
   zones: Zone[],
   stationProgress: number[],
   curve: THREE.CatmullRomCurve3
-): THREE.Group {
+): StationLandmarksHandle {
   const root = new THREE.Group();
+  const states: StationRevealState[] = [];
 
   zones.forEach((zone, idx) => {
     const t   = stationProgress[idx] ?? idx / Math.max(1, zones.length - 1);
     const p   = curve.getPointAt(t);
 
-    // Place the screen a small bit FURTHER ALONG the curve than the snap
-    // point so when the walker eases into the snap they see the screen
-    // straight ahead. For zones near the very end of the trail there is
-    // no "ahead" left, so we extrapolate using the end tangent — that
-    // keeps the screen front oriented toward the walker, no mirror.
     const VIEW_DELTA = 0.012;
     const tAhead = t + VIEW_DELTA;
 
-    const station = makeHoloScreen(zone);
+    const station = makeHoloScreen(zone, (s) => states.push(s));
     if (tAhead <= 1) {
       const sp = curve.getPointAt(tAhead);
       station.position.set(sp.x, 0, sp.z);
-      // lookAt the snap point — screen +Z faces walker arriving at p.
       station.lookAt(p.x, station.position.y, p.z);
     } else {
-      // Beyond the curve end: extrapolate using the end tangent.
       const tan = curve.getTangentAt(1).clone().normalize();
       const reach = VIEW_DELTA * (curve.getLength());
       station.position.set(p.x + tan.x * reach, 0, p.z + tan.z * reach);
-      // Walker is behind us along -tangent. Aim screen +Z back along
-      // -tangent so its front face shows the content head-on.
       station.lookAt(
         station.position.x - tan.x,
         station.position.y,
@@ -59,10 +69,53 @@ export function buildStationLandmarks(
     root.add(station);
   });
 
-  return root;
+  let lastActive = -1;
+  return {
+    group: root,
+    update(dt: number, activeIdx: number): void {
+      // When the active station changes, push the OLD active station into
+      // the dissolving phase (if it had any text built up).
+      if (activeIdx !== lastActive) {
+        if (lastActive >= 0 && lastActive < states.length) {
+          const prev = states[lastActive];
+          if (prev.phase === 'building' || prev.phase === 'built') {
+            prev.phase = 'dissolving';
+            prev.dissolveT = 0;
+            // Restart the front sweep from the top so the dissolve rains
+            // down from the top edge of the body region.
+            for (let c = 0; c < prev.cols; c++) prev.frontY[c] = 0;
+          }
+        }
+        // If the user comes BACK to a station that's mid-dissolve or
+        // already empty, kick it into building from scratch.
+        if (activeIdx >= 0 && activeIdx < states.length) {
+          const cur = states[activeIdx];
+          if (cur.phase === 'dissolving' || cur.phase === 'empty') {
+            cur.phase = 'building';
+            cur.buildT = 0;
+            for (let c = 0; c < cur.cols; c++) cur.frontY[c] = 0;
+            cur.revealMask.fill(0);
+          }
+        }
+        lastActive = activeIdx;
+      }
+
+      // Only animate panels that are mid build / dissolve. Once a panel
+      // reaches `built` or `empty` it freezes — no per-frame canvas work,
+      // no continuous ambient rain. This keeps idle frames cheap.
+      for (let i = 0; i < states.length; i++) {
+        const s = states[i];
+        if (s.phase !== 'building' && s.phase !== 'dissolving') continue;
+        tickStationPanel(s, dt, i === activeIdx);
+      }
+    },
+  };
 }
 
-function makeHoloScreen(zone: Zone): THREE.Group {
+function makeHoloScreen(
+  zone: Zone,
+  registerState: (s: StationRevealState) => void
+): THREE.Group {
   const g = new THREE.Group();
 
   // Expanded by 15% on left/right/bottom vs. the original 5.4 x 3.15
@@ -112,7 +165,9 @@ function makeHoloScreen(zone: Zone): THREE.Group {
   // Use NormalBlending with a translucent dark-glass background baked
   // into the canvas so text always has guaranteed contrast against the
   // forest behind it. The glow plane behind it adds the holographic feel.
-  const tex = makeHoloPanelTexture(zone);
+  const state = createStationPanel(zone);
+  registerState(state);
+  const tex = state.tex;
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(screenW, screenH),
     new THREE.MeshBasicMaterial({
@@ -222,39 +277,344 @@ function makeScreenHaloTexture(w = 256, h = 192): THREE.CanvasTexture {
 }
 
 /**
- * Render the zone's content into a 1024×608 holographic-style canvas
- * (transparent background, cyan grid + scanlines + corner brackets +
- * HUD-styled emissive text). With AdditiveBlending on the mesh, the
- * darker pixels disappear and the light pixels glow against the forest.
+ * Render the zone's content into a holographic-style canvas. The panel
+ * is composed of two pre-rendered layers (a static frame + a transparent
+ * content layer) blitted into a live canvas at runtime, so a matrix-rain
+ * reveal can wipe the content into view column-by-column. With the dark-
+ * glass backdrop in the frame layer the white-fill text reads crisply.
  */
-function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
+
+// ---------- rain animation tunables ----------
+const RAIN_GLYPHS = ['0', '1'];
+
+// Reveal grid: each panel is divided into cells. A per-column "front"
+// sweeps top-to-bottom while building, and the same front sweeps in the
+// other direction when dissolving. Smaller cells = smoother reveal but
+// more memory; these values give ~80×27 cells on the 1997×1030 panel.
+const CELL_W = 24;
+const CELL_H = 36;
+
+// Build/dissolve sweep speeds (px/sec). Each column gets a random speed
+// in this range so the wavefront looks irregular and "rain-like".
+const BUILD_SPEED_MIN     = 480;
+const BUILD_SPEED_MAX     = 820;
+const DISSOLVE_SPEED_MIN  = 560;
+const DISSOLVE_SPEED_MAX  = 940;
+
+// Drop population while a station is mid-reveal. Once the panel reaches
+// the `built` or `empty` phase, the drop pool is emptied and the panel
+// stops repainting entirely — no continuous ambient rain, no lag.
+const DROPS_ACTIVE  = 90;
+
+// Per-drop physics ranges.
+const DROP_VY_MIN   = 380;   // px / sec
+const DROP_VY_MAX   = 1100;
+const DROP_SIZE_MIN = 14;    // font px
+const DROP_SIZE_MAX = 26;
+const DROP_TAIL_MIN = 4;
+const DROP_TAIL_MAX = 9;
+const DROP_SHUFFLE  = 0.07;  // sec, glyph reroll interval
+
+interface RainDrop {
+  x: number;       // px on the canvas
+  y: number;       // px on the canvas (drop head position)
+  vy: number;      // px/sec
+  size: number;    // font size in px
+  tail: number;    // tail length in chars
+  glyph: string;
+  shuffleAcc: number;
+}
+
+type StationPhase = 'empty' | 'building' | 'built' | 'dissolving';
+
+interface StationRevealState {
+  W: number;
+  H: number;
+  bodyTop: number;
+  bodyBottom: number;
+  bodyLeft: number;
+  bodyRight: number;
+  cols: number;        // number of cell columns across the body region
+  rows: number;        // number of cell rows down the body region
+  /** revealMask[r * cols + c] in [0..1] — fraction of cell revealed */
+  revealMask: Float32Array;
+  /** per-column build/dissolve front (px from bodyTop). */
+  frontY: Float32Array;
+  /** per-column random speed multiplier (0.6 .. 1.0) */
+  colSpeed: Float32Array;
+
+  liveCanvas: HTMLCanvasElement;
+  liveCtx: CanvasRenderingContext2D;
+  frameCanvas: HTMLCanvasElement;
+  contentCanvas: HTMLCanvasElement;
+  drops: RainDrop[];
+  tex: THREE.CanvasTexture;
+
+  phase: StationPhase;
+  buildT: number;
+  dissolveT: number;
+}
+
+function createStationPanel(zone: Zone): StationRevealState {
   // Canvas scaled to match the expanded plane (1.30x wide, 1.15x tall)
   // so text isn't stretched. Original was 1536 x 896.
   const W = Math.round(1536 * 1.30); // 1997
   const H = Math.round(896 * 1.15);  // 1030
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
 
-  // Fully transparent panel — no background fill. Keep only frame + text.
+  const frameCanvas = document.createElement('canvas');
+  frameCanvas.width = W; frameCanvas.height = H;
+  drawFrameInto(frameCanvas.getContext('2d')!, W, H);
+
+  const contentCanvas = document.createElement('canvas');
+  contentCanvas.width = W; contentCanvas.height = H;
+  drawContentInto(contentCanvas.getContext('2d')!, zone, W, H);
+
+  const liveCanvas = document.createElement('canvas');
+  liveCanvas.width = W; liveCanvas.height = H;
+  const liveCtx = liveCanvas.getContext('2d')!;
+  liveCtx.drawImage(frameCanvas, 0, 0);
+
+  const tex = new THREE.CanvasTexture(liveCanvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+
+  // Body region (avoids the rounded outline + footer scroll cue).
+  const bodyTop = 20;
+  const bodyBottom = H - 84;
+  const bodyLeft = 32;
+  const bodyRight = W - 32;
+  const cols = Math.max(1, Math.floor((bodyRight - bodyLeft) / CELL_W));
+  const rows = Math.max(1, Math.floor((bodyBottom - bodyTop) / CELL_H));
+
+  const revealMask = new Float32Array(cols * rows); // all zero — empty
+  const frontY = new Float32Array(cols);            // 0 = nothing built yet
+  const colSpeed = new Float32Array(cols);
+  for (let c = 0; c < cols; c++) {
+    colSpeed[c] = 0.6 + Math.random() * 0.4;
+  }
+
+  // Drops are populated lazily by tickStationPanel when the station
+  // enters the building phase. Idle panels keep an empty drops array so
+  // they don't repaint at all.
+  const drops: RainDrop[] = [];
+
+  return {
+    W, H, bodyTop, bodyBottom, bodyLeft, bodyRight,
+    cols, rows, revealMask, frontY, colSpeed,
+    liveCanvas, liveCtx, frameCanvas, contentCanvas,
+    drops, tex,
+    phase: 'empty',
+    buildT: 0,
+    dissolveT: 0,
+  };
+}
+
+function spawnDrop(
+  bodyLeft: number, bodyRight: number,
+  bodyTop: number, bodyBottom: number,
+  initial: boolean,
+): RainDrop {
+  const size = DROP_SIZE_MIN + Math.random() * (DROP_SIZE_MAX - DROP_SIZE_MIN);
+  return {
+    x: bodyLeft + Math.random() * (bodyRight - bodyLeft),
+    // On initial spawn, scatter drops across the panel so rain is already
+    // mid-fall; afterwards new drops spawn just above the panel.
+    y: initial
+      ? bodyTop + Math.random() * (bodyBottom - bodyTop)
+      : bodyTop - 20 - Math.random() * 200,
+    vy: DROP_VY_MIN + Math.random() * (DROP_VY_MAX - DROP_VY_MIN),
+    size,
+    tail: DROP_TAIL_MIN + ((Math.random() * (DROP_TAIL_MAX - DROP_TAIL_MIN)) | 0),
+    glyph: RAIN_GLYPHS[(Math.random() * RAIN_GLYPHS.length) | 0],
+    shuffleAcc: Math.random() * DROP_SHUFFLE,
+  };
+}
+
+function tickStationPanel(s: StationRevealState, dt: number, isActive: boolean): void {
+  // 1) Advance per-column build / dissolve fronts.
+  const bodyH = s.bodyBottom - s.bodyTop;
+
+  if (s.phase === 'building') {
+    let allFull = true;
+    for (let c = 0; c < s.cols; c++) {
+      const v = BUILD_SPEED_MIN + (BUILD_SPEED_MAX - BUILD_SPEED_MIN) * s.colSpeed[c];
+      s.frontY[c] = Math.min(bodyH, s.frontY[c] + v * dt);
+      // Update reveal mask up to the front.
+      const rowsRevealed = Math.min(s.rows, Math.floor(s.frontY[c] / CELL_H));
+      for (let r = 0; r < rowsRevealed; r++) {
+        s.revealMask[r * s.cols + c] = 1;
+      }
+      // Partial cell at the wavefront.
+      if (rowsRevealed < s.rows) {
+        const remainder = (s.frontY[c] - rowsRevealed * CELL_H) / CELL_H;
+        s.revealMask[rowsRevealed * s.cols + c] = remainder;
+      }
+      if (s.frontY[c] < bodyH) allFull = false;
+    }
+    s.buildT += dt;
+    if (allFull) s.phase = 'built';
+  } else if (s.phase === 'dissolving') {
+    let allClear = true;
+    for (let c = 0; c < s.cols; c++) {
+      const v = DISSOLVE_SPEED_MIN + (DISSOLVE_SPEED_MAX - DISSOLVE_SPEED_MIN) * s.colSpeed[c];
+      // dissolve front travels DOWN from top, eating mask above it.
+      s.frontY[c] = Math.min(bodyH, s.frontY[c] + v * dt);
+      const rowsCleared = Math.min(s.rows, Math.floor(s.frontY[c] / CELL_H));
+      for (let r = 0; r < rowsCleared; r++) {
+        s.revealMask[r * s.cols + c] = 0;
+      }
+      if (rowsCleared < s.rows) {
+        const remainder = (s.frontY[c] - rowsCleared * CELL_H) / CELL_H;
+        // 1 - remainder of the front cell still has text.
+        s.revealMask[rowsCleared * s.cols + c] = 1 - remainder;
+      }
+      if (s.frontY[c] < bodyH) allClear = false;
+    }
+    s.dissolveT += dt;
+    if (allClear) {
+      s.phase = 'empty';
+      // Reset fronts so a future rebuild starts from zero again.
+      for (let c = 0; c < s.cols; c++) s.frontY[c] = 0;
+      s.revealMask.fill(0);
+    }
+  }
+
+  // 2) Advance drop physics. Drops only exist during build / dissolve;
+  //    when the panel finishes either phase we drop them entirely so the
+  //    canvas stops being re-blitted.
+  const stillAnimating = (s.phase === 'building' || s.phase === 'dissolving');
+  const targetDropCount = stillAnimating ? DROPS_ACTIVE : 0;
+  if (s.drops.length < targetDropCount) {
+    while (s.drops.length < targetDropCount) {
+      s.drops.push(spawnDrop(s.bodyLeft, s.bodyRight, s.bodyTop, s.bodyBottom, false));
+    }
+  } else if (s.drops.length > targetDropCount) {
+    s.drops.length = targetDropCount;
+  }
+
+  for (const d of s.drops) {
+    d.y += d.vy * dt;
+    d.shuffleAcc += dt;
+    if (d.shuffleAcc >= DROP_SHUFFLE) {
+      d.shuffleAcc = 0;
+      d.glyph = RAIN_GLYPHS[(Math.random() * RAIN_GLYPHS.length) | 0];
+    }
+    // Recycle drops that have fallen off the bottom.
+    if (d.y - d.tail * d.size * 1.05 > s.bodyBottom + 40) {
+      const fresh = spawnDrop(s.bodyLeft, s.bodyRight, s.bodyTop, s.bodyBottom, false);
+      d.x = fresh.x;
+      d.y = fresh.y;
+      d.vy = fresh.vy;
+      d.size = fresh.size;
+      d.tail = fresh.tail;
+      d.glyph = fresh.glyph;
+      d.shuffleAcc = 0;
+    }
+  }
+
+  // 3) Composite the panel: frame -> revealed text strips -> rain drops.
+  redrawStationPanel(s, isActive);
+}
+
+function redrawStationPanel(s: StationRevealState, isActive: boolean): void {
+  const ctx = s.liveCtx;
+  const { W, H, bodyTop, bodyLeft, cols, rows, revealMask, frameCanvas, contentCanvas } = s;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(frameCanvas, 0, 0);
+
+  // ---- blit revealed text cells ----
+  // Walk the mask cell-by-cell. For full cells we batch contiguous runs
+  // along the same row to reduce drawImage calls.
+  for (let r = 0; r < rows; r++) {
+    let runStart = -1;
+    for (let c = 0; c <= cols; c++) {
+      const m = c < cols ? revealMask[r * cols + c] : 0;
+      if (m >= 0.999) {
+        if (runStart < 0) runStart = c;
+      } else {
+        if (runStart >= 0) {
+          const sx = bodyLeft + runStart * CELL_W;
+          const sy = bodyTop + r * CELL_H;
+          const sw = (c - runStart) * CELL_W;
+          ctx.drawImage(contentCanvas, sx, sy, sw, CELL_H, sx, sy, sw, CELL_H);
+          runStart = -1;
+        }
+        // Partial cell — draw a fractional vertical slice (top portion
+        // for build, bottom portion for dissolve).
+        if (m > 0.001 && c < cols) {
+          const sx = bodyLeft + c * CELL_W;
+          const sy = bodyTop + r * CELL_H;
+          const sliceH = Math.max(1, m * CELL_H);
+          if (s.phase === 'building' || s.phase === 'built') {
+            ctx.drawImage(contentCanvas, sx, sy, CELL_W, sliceH, sx, sy, CELL_W, sliceH);
+          } else {
+            // dissolving: keep the BOTTOM portion of the cell (top is being eaten).
+            const yOff = CELL_H - sliceH;
+            ctx.drawImage(
+              contentCanvas,
+              sx, sy + yOff, CELL_W, sliceH,
+              sx, sy + yOff, CELL_W, sliceH,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // ---- draw falling drops on top ----
+  ctx.textBaseline = 'top';
+  for (const d of s.drops) {
+    // Tail: each preceding glyph is offset upward by ~size*1.05 px.
+    const stride = d.size * 1.05;
+    ctx.font = `700 ${Math.round(d.size)}px "Consolas", "Menlo", "Courier New", monospace`;
+    for (let k = 0; k < d.tail; k++) {
+      const yy = d.y - k * stride;
+      if (yy + d.size < bodyTop - 80) break;
+      if (yy > s.bodyBottom + 40) continue;
+      const fade = 1 - k / d.tail;
+      let alpha: number;
+      let color: string;
+      if (k === 0) {
+        // Bright wet head.
+        alpha = isActive ? 0.95 * fade : 0.75 * fade;
+        color = `rgba(235, 255, 245, ${alpha})`;
+      } else {
+        // Trailing drips — cool cyan/green fading out.
+        alpha = (isActive ? 0.55 : 0.30) * fade;
+        color = `rgba(120, 220, 200, ${alpha})`;
+      }
+      ctx.fillStyle = color;
+      ctx.fillText(d.glyph, d.x, yy);
+    }
+  }
+
+  s.tex.needsUpdate = true;
+}
+
+/**
+ * Paint the always-visible scaffolding: dark-glass backdrop, faint grid,
+ * rounded outline, corner brackets, header underline, footer hairline +
+ * "SCROLL ↓ TO CONTINUE" cue. NO zone text — that lives on the content
+ * layer so it can be hidden until the rain reveal exposes it.
+ */
+function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): void {
   ctx.clearRect(0, 0, W, H);
 
   // ---- dark-glass backdrop for guaranteed text contrast ----
-  // Matches the look of the HTML contact pills (rgba(8, 22, 32, 0.78))
-  // so canvas text reads as crisply as the DOM overlay. A vertical
-  // gradient adds depth without losing contrast at the bottom.
   ctx.save();
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.clip();
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0,    'rgba(6, 18, 28, 0.82)');
-  bg.addColorStop(0.5,  'rgba(8, 22, 32, 0.80)');
-  bg.addColorStop(1,    'rgba(10, 26, 38, 0.78)');
+  bg.addColorStop(0,   'rgba(6, 18, 28, 0.82)');
+  bg.addColorStop(0.5, 'rgba(8, 22, 32, 0.80)');
+  bg.addColorStop(1,   'rgba(10, 26, 38, 0.78)');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
 
-  // ---- subtle grid lines (very faint, hint of structure) ----
+  // ---- subtle grid lines ----
   ctx.save();
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.clip();
@@ -278,17 +638,38 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   // ---- corner brackets ----
   drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 42, 'rgba(200, 245, 255, 0.95)', 5);
 
-  // ---- header bar (transparent, just an underline) ----
+  // ---- header underline ----
   ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(40, 110); ctx.lineTo(W - 40, 110);
   ctx.stroke();
 
-  // Outline-and-fill: every fillText below first strokes a thin dark
-  // outline (for sub-pixel crispness against the dark backdrop), then
-  // fills with near-white. With the new opaque backdrop the heavy outline
-  // is no longer needed — keep it slim so glyphs stay sharp.
+  // ---- footer hairline + scroll cue ----
+  ctx.fillStyle = 'rgba(180, 240, 255, 0.45)';
+  ctx.fillRect(40, H - 80, W - 80, 1);
+  ctx.fillStyle = 'rgba(220, 235, 245, 0.95)';
+  ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'right';
+  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
+  ctx.textAlign = 'left';
+}
+
+/**
+ * Paint the zone's text content (header title + body) onto a transparent
+ * canvas. Uses a thin dark outline + near-white fill so text reads on the
+ * dark-glass backdrop after it's blitted onto the live canvas.
+ */
+function drawContentInto(
+  ctx: CanvasRenderingContext2D,
+  zone: Zone,
+  W: number,
+  H: number,
+): void {
+  ctx.clearRect(0, 0, W, H);
+
+  // Outline-and-fill text helper override (same as before).
   const baseFillText = ctx.fillText.bind(ctx);
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
@@ -310,8 +691,6 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   ctx.fillText('// ' + zone.title.toUpperCase(), 64, 75);
   ctx.textBaseline = 'top';
 
-  // Body content (zone-typed). Color values are kept for compatibility but
-  // the override above paints every line near-white with a thin outline.
   const bodyX = 64;
   let y = 180;
   const accent  = 'rgba(120, 220, 255, 1.0)';
@@ -338,8 +717,6 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
       wrap(zone.payload.tagline, 'italic 600 45px "Segoe UI", system-ui, sans-serif', 52, W - bodyX - 80);
       y += 30;
       ctx.fillStyle = muted;
-      // bio is split into paragraphs on blank lines so each paragraph
-      // wraps independently with a small gap, matching the HTML page.
       const paragraphs = zone.payload.bio.split(/\n\s*\n/);
       for (let i = 0; i < paragraphs.length; i++) {
         wrap(paragraphs[i], '500 40px "Segoe UI", system-ui, sans-serif', 46, W - bodyX - 80);
@@ -349,7 +726,6 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
     }
     case 'education': {
       for (const it of zone.payload.items) {
-        // Extra breathing room before the Languages section.
         if (it.institution.toLowerCase().startsWith('language')) y += 32;
         ctx.fillStyle = primary;
         ctx.font = '700 46px "Segoe UI", system-ui, sans-serif';
@@ -367,7 +743,6 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
       break;
     }
     case 'skills': {
-      // 3 columns x 2 rows (up to 6 groups).
       const groups = zone.payload.groups.slice(0, 6);
       const cols = 3;
       const colW = (W - bodyX - 80) / cols;
@@ -386,7 +761,6 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
         ctx.font = '500 28px "Segoe UI", system-ui, sans-serif';
         for (const s of grp.items) {
           if (cy > H - 80) break;
-          // Wrap each bullet to column width.
           const lines = wrapText(ctx, '› ' + s, colW - 16);
           for (const ln of lines) {
             if (cy > H - 80) break;
@@ -463,7 +837,7 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
         'Working on a project together would be great — but even if you’re not, I’d still love to meet up, swap stories and grow the network. Reach out anytime.',
         '400 40px "Segoe UI", system-ui, sans-serif',
         46,
-        W - bodyX - 80
+        W - bodyX - 80,
       );
       y += 18;
       ctx.fillStyle = accent;
@@ -475,22 +849,8 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
       break;
     }
   }
-
-  // ---- footer hairline + scroll cue ----
-  ctx.fillStyle = 'rgba(180, 240, 255, 0.45)';
-  ctx.fillRect(40, H - 80, W - 80, 1);
-  ctx.fillStyle = 'rgba(220, 235, 245, 0.95)';
-  ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
-  ctx.textAlign = 'left';
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
 }
+
 
 function drawRoundedRectPath(
   ctx: CanvasRenderingContext2D,
