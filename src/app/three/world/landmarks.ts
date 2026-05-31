@@ -239,11 +239,26 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   // Fully transparent panel — no background fill. Keep only frame + text.
   ctx.clearRect(0, 0, W, H);
 
+  // ---- dark-glass backdrop for guaranteed text contrast ----
+  // Matches the look of the HTML contact pills (rgba(8, 22, 32, 0.78))
+  // so canvas text reads as crisply as the DOM overlay. A vertical
+  // gradient adds depth without losing contrast at the bottom.
+  ctx.save();
+  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
+  ctx.clip();
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0,    'rgba(6, 18, 28, 0.82)');
+  bg.addColorStop(0.5,  'rgba(8, 22, 32, 0.80)');
+  bg.addColorStop(1,    'rgba(10, 26, 38, 0.78)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
   // ---- subtle grid lines (very faint, hint of structure) ----
   ctx.save();
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.clip();
-  ctx.strokeStyle = 'rgba(20, 60, 140, 0.10)';
+  ctx.strokeStyle = 'rgba(140, 220, 255, 0.08)';
   ctx.lineWidth = 1;
   const cell = 64;
   for (let x = 16; x < W - 16; x += cell) {
@@ -256,33 +271,34 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
 
   // ---- outer rounded outline ----
   ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(20, 70, 160, 0.95)';
+  ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.stroke();
 
   // ---- corner brackets ----
-  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 42, 'rgba(15, 60, 150, 1.0)', 5);
+  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 42, 'rgba(200, 245, 255, 0.95)', 5);
 
   // ---- header bar (transparent, just an underline) ----
-  ctx.strokeStyle = 'rgba(20, 70, 160, 0.7)';
+  ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(40, 110); ctx.lineTo(W - 40, 110);
   ctx.stroke();
 
-  // Outline-and-fill: every fillText below first strokes a thick dark navy
-  // outline, then fills with white. This keeps text legible against both
-  // dark trunks and bright sun patches.
+  // Outline-and-fill: every fillText below first strokes a thin dark
+  // outline (for sub-pixel crispness against the dark backdrop), then
+  // fills with near-white. With the new opaque backdrop the heavy outline
+  // is no longer needed — keep it slim so glyphs stay sharp.
   const baseFillText = ctx.fillText.bind(ctx);
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
   (ctx as any).fillText = (text: string, tx: number, ty: number, maxW?: number) => {
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = 'rgba(6, 16, 50, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 8, 20, 0.85)';
     if (maxW != null) ctx.strokeText(text, tx, ty, maxW);
     else ctx.strokeText(text, tx, ty);
     const prev = ctx.fillStyle;
-    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)';
+    ctx.fillStyle = 'rgba(240, 250, 255, 1.0)';
     if (maxW != null) baseFillText(text, tx, ty, maxW);
     else baseFillText(text, tx, ty);
     ctx.fillStyle = prev;
@@ -295,13 +311,13 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   ctx.textBaseline = 'top';
 
   // Body content (zone-typed). Color values are kept for compatibility but
-  // the override above paints every line white with a navy outline.
+  // the override above paints every line near-white with a thin outline.
   const bodyX = 64;
   let y = 180;
-  const accent  = 'rgba(0, 90, 200, 1.0)';
-  const primary = 'rgba(6, 24, 80, 1.0)';
-  const muted   = 'rgba(15, 40, 110, 1.0)';
-  const dim     = 'rgba(25, 60, 130, 1.0)';
+  const accent  = 'rgba(120, 220, 255, 1.0)';
+  const primary = 'rgba(255, 235, 180, 1.0)';
+  const muted   = 'rgba(220, 235, 245, 1.0)';
+  const dim     = 'rgba(180, 205, 220, 1.0)';
 
   const wrap = (txt: string, font: string, lineHeight: number, maxW: number) => {
     ctx.font = font;
@@ -461,9 +477,9 @@ function makeHoloPanelTexture(zone: Zone): THREE.CanvasTexture {
   }
 
   // ---- footer hairline + scroll cue ----
-  ctx.fillStyle = 'rgba(20, 70, 160, 0.55)';
+  ctx.fillStyle = 'rgba(180, 240, 255, 0.45)';
   ctx.fillRect(40, H - 80, W - 80, 1);
-  ctx.fillStyle = 'rgba(10, 40, 110, 0.95)';
+  ctx.fillStyle = 'rgba(220, 235, 245, 0.95)';
   ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
   ctx.textAlign = 'right';
   ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
