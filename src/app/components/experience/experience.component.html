@@ -39,16 +39,52 @@
 
   @if (isContactActive() && contactLinks(); as c) {
     <div class="contact-overlay" role="region" aria-label="Contact links">
-      <a class="contact-pill primary" [href]="'mailto:' + c.email">
-        ✉ {{ c.email }}
-      </a>
-      <div class="contact-links">
-        @for (l of c.links; track l.url) {
-          <a class="contact-pill" [href]="l.url" target="_blank" rel="noopener noreferrer">
-            {{ l.label }} ↗
-          </a>
-        }
-      </div>
+      @if (!formOpen()) {
+        <a class="contact-pill primary" [href]="'mailto:' + c.email">
+          ✉ {{ c.email }}
+        </a>
+        <button type="button" class="contact-pill form-toggle" (click)="toggleForm()">
+          ✍ Send a message
+        </button>
+        <div class="contact-links">
+          @for (l of c.links; track l.url) {
+            <a class="contact-pill" [href]="l.url" target="_blank" rel="noopener noreferrer">
+              {{ l.label }} ↗
+            </a>
+          }
+        </div>
+      } @else {
+        <form class="contact-form" (ngSubmit)="onSubmit()" #f="ngForm" novalidate>
+          <button type="button" class="form-close" (click)="closeForm()" aria-label="Close form">✕</button>
+          <h3>Drop a line</h3>
+
+          @if (!emailConfigured()) {
+            <p class="form-note">Direct send isn't configured here — submitting will open your email client.</p>
+          }
+
+          <div class="row">
+            <input type="text" name="name" placeholder="Your name" required
+                   [(ngModel)]="form.name" autocomplete="name" />
+            <input type="email" name="email" placeholder="Your email" required
+                   [(ngModel)]="form.email" autocomplete="email" />
+          </div>
+          <input type="text" name="subject" placeholder="Subject" required
+                 [(ngModel)]="form.subject" />
+          <textarea name="message" placeholder="Message" rows="4" required minlength="5"
+                    [(ngModel)]="form.message"></textarea>
+
+          @if (submitMsg()) {
+            <div class="form-status" [class.ok]="submitOk()" [class.err]="submitOk() === false">
+              {{ submitMsg() }}
+            </div>
+          }
+
+          <button type="submit" class="contact-pill primary submit"
+                  [disabled]="isSubmitting() || !formValid()">
+            {{ isSubmitting() ? 'Sending…' : 'Send' }}
+          </button>
+        </form>
+      }
     </div>
   }
 </div>

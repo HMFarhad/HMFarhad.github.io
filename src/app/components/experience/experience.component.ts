@@ -3,15 +3,17 @@ import {
   PLATFORM_ID, NgZone, inject, signal
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ACTIVE_ZONES } from '../../core/content/zones';
 import type { Zone } from '../../core/content/zone.model';
 import { isMobileLayout } from '../../core/device';
 import { ensureHoloFonts } from '../../core/holo-fonts';
+import { EmailService, ContactFormData } from '../../core/email.service';
 
 @Component({
   selector: 'app-experience',
   standalone: true,
-  imports: [],
+  imports: [FormsModule],
   host: { ngSkipHydration: 'true' },
   templateUrl: './experience.component.html',
   styleUrl: './experience.component.scss'
@@ -21,6 +23,7 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
 
   private platformId = inject(PLATFORM_ID);
   private zone       = inject(NgZone);
+  private email      = inject(EmailService);
 
   private scene: any = null;
   private detachInput: (() => void) | null = null;
@@ -30,6 +33,14 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
   hoverIndex  = signal<number | null>(null);
   showHint    = signal(true);
   isMobile    = signal(false);
+
+  // Contact form state.
+  form: ContactFormData = { name: '', email: '', subject: '', message: '' };
+  formOpen     = signal(false);
+  isSubmitting = signal(false);
+  submitMsg    = signal('');
+  submitOk     = signal<boolean | null>(null);
+  emailConfigured = signal(false);
 
   private mobileMq: MediaQueryList | null = null;
   private onMobileMqChange: ((e: MediaQueryListEvent) => void) | null = null;
@@ -219,5 +230,67 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
     const z = this.zones.find((zz) => zz.id === 'contact');
     if (!z || z.id !== 'contact') return null;
     return { email: z.payload.email, links: z.payload.links };
+  }
+
+  // ---------------- contact form ----------------
+
+  toggleForm(): void {
+    this.emailConfigured.set(this.email.isConfigured);
+    this.formOpen.update((v) => !v);
+    if (!this.formOpen()) this.clearStatus();
+  }
+
+  closeForm(): void {
+    this.formOpen.set(false);
+    this.clearStatus();
+  }
+
+  private clearStatus(): void {
+    this.submitMsg.set('');
+    this.submitOk.set(null);
+  }
+
+  formValid(): boolean {
+    const f = this.form;
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return !!(f.name.trim() && emailRe.test(f.email.trim())
+      && f.subject.trim() && f.message.trim().length >= 5);
+  }
+
+  async onSubmit(): Promise<void> {
+    if (this.isSubmitting() || !this.formValid()) return;
+    this.isSubmitting.set(true);
+    this.clearStatus();
+
+    const res = await this.email.send({
+      name:    this.form.name.trim(),
+      email:   this.form.email.trim(),
+      subject: this.form.subject.trim(),
+      message: this.form.message.trim()
+    });
+
+    if (res.success) {
+      this.submitOk.set(true);
+      this.submitMsg.set(`Thanks ${this.form.name.split(' ')[0]} — your message is on its way.`);
+      this.form = { name: '', email: '', subject: '', message: '' };
+    } else if (res.notConfigured) {
+      this.openMailto();
+    } else {
+      this.submitOk.set(false);
+      this.submitMsg.set(res.error || 'Something went wrong. Please try again.');
+    }
+    this.isSubmitting.set(false);
+  }
+
+  private openMailto(): void {
+    const c = this.contactLinks();
+    if (!c) return;
+    const subject = encodeURIComponent(this.form.subject || 'Hello from your portfolio');
+    const body = encodeURIComponent(
+      `Name: ${this.form.name}\nEmail: ${this.form.email}\n\n${this.form.message}`
+    );
+    window.open(`mailto:${c.email}?subject=${subject}&body=${body}`, '_blank');
+    this.submitOk.set(true);
+    this.submitMsg.set('Opening your email client…');
   }
 }

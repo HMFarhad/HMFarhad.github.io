@@ -4,8 +4,12 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "inject:env": "node scripts/inject-env.mjs",
+    "prestart": "npm run inject:env",
+    "prebuild": "npm run inject:env",
+    "prewatch": "npm run inject:env",
     "build": "ng build",
-    "build:gh-pages": "ng build --base-href=/ && node scripts/gh-pages-postbuild.mjs",
+    "build:gh-pages": "npm run inject:env && ng build --base-href=/ && node scripts/gh-pages-postbuild.mjs",
     "fetch:assets": "node scripts/fetch-assets.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
@@ -21,6 +25,7 @@
     "@angular/platform-server": "^21.2.0",
     "@angular/router": "^21.2.0",
     "@angular/ssr": "^21.2.13",
+    "@emailjs/browser": "^4.4.1",
     "express": "^5.1.0",
     "rxjs": "~7.8.0",
     "three": "^0.184.0",
