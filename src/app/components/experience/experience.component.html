@@ -29,7 +29,7 @@
 
   @if (showHint()) {
     <div class="hint" aria-hidden="true">
-      <span>Scroll · drag · arrow keys to walk the path</span>
+      <span>{{ isMobile() ? 'Swipe to walk · tap panels · use zone map' : 'Scroll · drag · arrow keys to walk the path' }}</span>
     </div>
   }
 

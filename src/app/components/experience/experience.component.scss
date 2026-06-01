@@ -3,6 +3,9 @@
 .experience-root {
   position: fixed; inset: 0; overflow: hidden;
   background: #6a7468;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .three-canvas {
@@ -179,11 +182,102 @@
   li.active .lbl { font-weight: 700; }
 }
 
+@media (max-width: 768px) {
+  .hud-top {
+    padding:
+      max(.75rem, env(safe-area-inset-top, 0px))
+      max(.75rem, env(safe-area-inset-right, 0px))
+      .5rem
+      max(.75rem, env(safe-area-inset-left, 0px));
+    gap: .5rem;
+  }
+
+  .active-zone strong { font-size: 1.05rem; }
+  .active-zone small  { font-size: 10px; }
+
+  .escape {
+    font-size: 12px;
+    padding: .35rem .6rem;
+    flex-shrink: 0;
+  }
+
+  .hint {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    font-size: 12px;
+    max-width: 92vw;
+    text-align: center;
+    line-height: 1.35;
+  }
+
+  .tooltip {
+    bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+    font-size: 12px;
+  }
+
+  .contact-overlay {
+    top: 54%;
+    max-width: 94vw;
+    gap: .5rem;
+  }
+
+  .contact-pill {
+    font-size: 13px;
+    padding: .48rem .8rem;
+  }
+
+  .mini-map {
+    top: auto;
+    bottom: max(.65rem, env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 1rem);
+
+    ol {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: .45rem .55rem;
+      gap: .2rem;
+
+      &::-webkit-scrollbar { display: none; }
+    }
+
+    .lbl { display: none; }
+
+    button {
+      grid-template-columns: 10px 24px;
+      padding: .35rem .45rem;
+      width: auto;
+    }
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  .hud-top {
+    padding-top: max(.45rem, env(safe-area-inset-top, 0px));
+  }
+
+  .active-zone strong { font-size: .95rem; }
+
+  .mini-map {
+    bottom: max(.4rem, env(safe-area-inset-bottom, 0px));
+
+    ol { max-width: min(92vw, 520px); }
+  }
+
+  .hint {
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .contact-overlay { top: 50%; }
+}
+
 @media (max-width: 640px) {
   .mini-map {
-    right: .5rem;
     font-size: 12px;
-    .lbl { display: none; }
-    button { grid-template-columns: 14px 28px; }
+    button { grid-template-columns: 10px 22px; }
   }
 }

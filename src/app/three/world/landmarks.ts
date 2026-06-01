@@ -60,6 +60,8 @@ export interface StationLandmarksHandle {
    * otherwise null.
    */
   pickLink(zoneIdx: number, u: number, v: number): string | null;
+  /** Scale holo screens to fit the current canvas viewport. */
+  setViewport(w: number, h: number): void;
 }
 
 export function buildStationLandmarks(
@@ -107,6 +109,12 @@ export function buildStationLandmarks(
   let lastActive = -1;
   return {
     group: root,
+    setViewport(w: number, h: number): void {
+      const scale = holoScreenScaleForViewport(w, h);
+      for (const child of root.children) {
+        child.scale.setScalar(scale);
+      }
+    },
     update(dt: number, activeIdx: number): void {
       // When the active station changes, push the OLD active panel into
       // the dissolving phase (if it had any text built up).
@@ -179,6 +187,26 @@ export function buildStationLandmarks(
       return null;
     },
   };
+}
+
+/** Uniform scale for holo station groups so panels fit narrow/short viewports. */
+export function holoScreenScaleForViewport(w: number, h: number): number {
+  const aspect = w / Math.max(1, h);
+  const shortSide = Math.min(w, h);
+
+  // Portrait — the panel is much wider than the view frustum.
+  if (aspect < 0.85) {
+    return THREE.MathUtils.clamp(0.36 + aspect * 0.44, 0.48, 0.76);
+  }
+  // Phone landscape or small-height windows.
+  if (shortSide < 520) {
+    return THREE.MathUtils.clamp(shortSide / 700, 0.66, 0.90);
+  }
+  // Nearly-square or slightly tall layouts (tablets).
+  if (aspect < 1.15) {
+    return THREE.MathUtils.clamp(0.76 + (aspect - 0.85) * 0.45, 0.76, 0.94);
+  }
+  return 1;
 }
 
 function makeHoloScreen(

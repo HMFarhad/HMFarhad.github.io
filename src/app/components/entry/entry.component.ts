@@ -24,9 +24,7 @@ export class EntryComponent implements OnInit {
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const narrow  = window.innerWidth < 900;
-    const target = reduced || narrow ? '/page' : '/experience';
-    // Replace so back button goes to the previous site, not loop.
+    const target = reduced ? '/page' : '/experience';
     this.router.navigateByUrl(target, { replaceUrl: true });
   }
 }

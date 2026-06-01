@@ -5,6 +5,7 @@ import {
 import { isPlatformBrowser } from '@angular/common';
 import { ACTIVE_ZONES } from '../../core/content/zones';
 import type { Zone } from '../../core/content/zone.model';
+import { isMobileLayout } from '../../core/device';
 
 @Component({
   selector: 'app-experience',
@@ -27,9 +28,18 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
   activeIndex = signal(0);
   hoverIndex  = signal<number | null>(null);
   showHint    = signal(true);
+  isMobile    = signal(false);
+
+  private mobileMq: MediaQueryList | null = null;
+  private onMobileMqChange: ((e: MediaQueryListEvent) => void) | null = null;
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
+
+    this.isMobile.set(isMobileLayout());
+    this.mobileMq = window.matchMedia('(max-width: 768px), (pointer: coarse)');
+    this.onMobileMqChange = () => this.isMobile.set(isMobileLayout());
+    this.mobileMq.addEventListener('change', this.onMobileMqChange);
 
     // Run three.js outside Angular zone so its rAF loop doesn't trigger CD.
     this.zone.runOutsideAngular(() => {
@@ -53,6 +63,9 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.mobileMq && this.onMobileMqChange) {
+      this.mobileMq.removeEventListener('change', this.onMobileMqChange);
+    }
     this.detachInput?.();
     this.scene?.dispose?.();
     this.scene = null;
@@ -61,41 +74,22 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
   // ---------------- input ----------------
   private attachInput(canvas: HTMLCanvasElement): () => void {
     const scrollRange = 9000;
-    const touchMul    = 1.2;
+    const touchMul    = this.isMobile() ? 1.55 : 1.2;
+    const tapSlop     = 12;
 
     let touchY: number | null = null;
+    let touchX: number | null = null;
+    let touchMoved = false;
+    let lastTouchPickAt = 0;
 
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      this.showHint.set(false);
-      this.scene?.addScrollDelta(e.deltaY / scrollRange);
-    };
-    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0]?.clientY ?? null; };
-    const onTouchMove = (e: TouchEvent) => {
-      if (touchY == null) return;
-      const y = e.touches[0]?.clientY;
-      if (y == null) return;
-      e.preventDefault();
-      this.showHint.set(false);
-      const dy = touchY - y;
-      touchY = y;
-      this.scene?.addScrollDelta((dy * touchMul) / scrollRange);
-    };
-    const onTouchEnd = () => { touchY = null; };
-
-    const onMouseMove = (e: MouseEvent) => {
+    const pointerFromClient = (clientX: number, clientY: number) => {
       const r = canvas.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width)  *  2 - 1;
-      const y = ((e.clientY - r.top)  / r.height) * -2 + 1;
-      this.scene?.setPointer(x, y);
+      return {
+        x: ((clientX - r.left) / r.width)  *  2 - 1,
+        y: ((clientY - r.top)  / r.height) * -2 + 1,
+      };
     };
-    const onClick = (e: MouseEvent) => {
-      const r = canvas.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width)  *  2 - 1;
-      const y = ((e.clientY - r.top)  / r.height) * -2 + 1;
-      this.scene?.setPointer(x, y);
-      // Prefer link pills on the holo-panel over a station jump so the
-      // "Visit Site" buttons feel like real buttons.
+    const activateAtPointer = () => {
       const url = this.scene?.pickLink();
       if (url) {
         window.open(url, '_blank', 'noopener');
@@ -103,6 +97,57 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
       }
       const idx = this.scene?.pickStation();
       if (typeof idx === 'number') this.scene?.jumpToStation(idx);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      this.showHint.set(false);
+      this.scene?.addScrollDelta(e.deltaY / scrollRange);
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      touchX = t.clientX;
+      touchY = t.clientY;
+      touchMoved = false;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null || touchX == null) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - touchX;
+      const dy = t.clientY - touchY;
+      if (Math.abs(dx) > tapSlop || Math.abs(dy) > tapSlop) touchMoved = true;
+      e.preventDefault();
+      this.showHint.set(false);
+      this.scene?.addScrollDelta((-dy * touchMul) / scrollRange);
+      touchX = t.clientX;
+      touchY = t.clientY;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchMoved) {
+        const t = e.changedTouches[0];
+        if (t) {
+          const p = pointerFromClient(t.clientX, t.clientY);
+          this.scene?.setPointer(p.x, p.y);
+          lastTouchPickAt = performance.now();
+          activateAtPointer();
+        }
+      }
+      touchX = null;
+      touchY = null;
+      touchMoved = false;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const p = pointerFromClient(e.clientX, e.clientY);
+      this.scene?.setPointer(p.x, p.y);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (performance.now() - lastTouchPickAt < 400) return;
+      const p = pointerFromClient(e.clientX, e.clientY);
+      this.scene?.setPointer(p.x, p.y);
+      activateAtPointer();
     };
     const onKey = (e: KeyboardEvent) => {
       const last = this.zones.length - 1;

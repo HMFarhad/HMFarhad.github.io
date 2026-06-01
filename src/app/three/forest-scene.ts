@@ -6,6 +6,7 @@ import { Forest }              from './world/forest';
 import { GodRays }             from './world/godrays';
 import { buildStationLandmarks, type StationLandmarksHandle } from './world/landmarks';
 import { ACTIVE_ZONES }        from '../core/content/zones';
+import { isMobileLayout }      from '../core/device';
 
 const SCROLL_EASE    = 1.6;
 const SNAP_THRESHOLD = 0.025;
@@ -42,10 +43,13 @@ export class ForestScene {
   private rafId = 0;
   private lastFrame = performance.now();
   private resizeHandler: () => void;
+  private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
+  private mobile = false;
 
   constructor(private canvas: HTMLCanvasElement, stationCount: number) {
     this.stationCount = stationCount;
+    this.mobile = isMobileLayout();
 
     this.initRenderer();
     this.initScene();
@@ -61,10 +65,12 @@ export class ForestScene {
 
     this.landmarks = buildStationLandmarks(ACTIVE_ZONES, this.stationProgress, this.curve);
     this.scene.add(this.landmarks.group);
+    this.applyViewportLayout();
 
     this.scene.add(buildGround(400));
 
-    this.forest = new Forest(this.curve, this.trailLen);
+    const forestCfg = this.mobile ? { trunkCount: 200, bushCount: 100 } : undefined;
+    this.forest = new Forest(this.curve, this.trailLen, forestCfg);
     this.scene.add(this.forest.group);
 
     this.godRays = new GodRays(this.curve);
@@ -74,6 +80,9 @@ export class ForestScene {
 
     this.resizeHandler = () => this.onResize();
     window.addEventListener('resize', this.resizeHandler);
+    window.visualViewport?.addEventListener('resize', this.resizeHandler);
+    this.resizeObserver = new ResizeObserver(this.resizeHandler);
+    this.resizeObserver.observe(this.canvas);
 
     this.lastFrame = performance.now();
     this.rafId = requestAnimationFrame(this.tick);
@@ -136,6 +145,8 @@ export class ForestScene {
     this.disposed = true;
     cancelAnimationFrame(this.rafId);
     window.removeEventListener('resize', this.resizeHandler);
+    window.visualViewport?.removeEventListener('resize', this.resizeHandler);
+    this.resizeObserver?.disconnect();
     this.forest?.dispose();
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -151,8 +162,13 @@ export class ForestScene {
 
   // ---------------- init ----------------
   private initRenderer(): void {
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: !this.mobile,
+      powerPreference: this.mobile ? 'low-power' : 'high-performance',
+    });
+    const maxDpr = this.mobile ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr));
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
     this.renderer.outputColorSpace      = THREE.SRGBColorSpace;
     this.renderer.toneMapping           = THREE.ACESFilmicToneMapping;
@@ -164,7 +180,22 @@ export class ForestScene {
   }
   private initCamera(): void {
     const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-    this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 500);
+    this.camera = new THREE.PerspectiveCamera(this.fovForAspect(aspect), aspect, 0.1, 500);
+  }
+
+  /** Wider FOV on small screens so holo panels stay in frame. */
+  private fovForAspect(aspect: number): number {
+    if (aspect < 0.85) return 68;
+    if (aspect < 1.15) return 60;
+    if (this.mobile && aspect < 1.6) return 58;
+    return 55;
+  }
+
+  private applyViewportLayout(): void {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    if (w < 1 || h < 1) return;
+    this.landmarks.setViewport(w, h);
   }
 
   // ---------------- trail ----------------
@@ -282,8 +313,12 @@ export class ForestScene {
   private onResize(): void {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    this.camera.aspect = w / Math.max(1, h);
+    const aspect = w / Math.max(1, h);
+    this.mobile = isMobileLayout();
+    this.camera.fov = this.fovForAspect(aspect);
+    this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
+    this.applyViewportLayout();
   }
 }
