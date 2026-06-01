@@ -72,7 +72,9 @@ jobs:
           EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
           EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
           EMAILJS_AUTOREPLY_TEMPLATE_ID: ${{ secrets.EMAILJS_AUTOREPLY_TEMPLATE_ID }}
-        run: npx ng build --base-href=/legacy/
+        run: |
+          npm run inject:env
+          npx ng build --base-href=/legacy/
 
       - name: Locate legacy output
         id: legacy_out
