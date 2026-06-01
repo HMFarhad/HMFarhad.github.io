@@ -58,7 +58,7 @@ export class EmailService {
       user_message: formData.message
     };
 
-    // Send email using EmailJS
+    // Send notification email to the site owner
     const emailPromise = emailjs.send(
       environment.emailjs.serviceId,
       environment.emailjs.templateId,
@@ -69,6 +69,15 @@ export class EmailService {
     return from(emailPromise).pipe(
       map((response: any) => {
         if (response.status === 200) {
+          // Fire-and-forget auto-reply to the sender if a second template
+          // is configured. Failures here must not break the success path —
+          // the user's message has already been delivered.
+          const autoReplyId = (environment.emailjs as any).autoReplyTemplateId;
+          if (autoReplyId) {
+            emailjs
+              .send(environment.emailjs.serviceId, autoReplyId, templateParams)
+              .catch((err) => console.warn('Auto-reply failed:', err));
+          }
           return {
             success: true,
             message: 'Email sent successfully'
