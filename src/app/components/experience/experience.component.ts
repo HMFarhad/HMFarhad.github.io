@@ -6,6 +6,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { ACTIVE_ZONES } from '../../core/content/zones';
 import type { Zone } from '../../core/content/zone.model';
 import { isMobileLayout } from '../../core/device';
+import { ensureHoloFonts } from '../../core/holo-fonts';
 
 @Component({
   selector: 'app-experience',
@@ -45,6 +46,7 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
     this.zone.runOutsideAngular(() => {
       // Defer one frame so hydration finishes before WebGL binds the canvas.
       requestAnimationFrame(async () => {
+        await ensureHoloFonts();
         const { ForestScene } = await import('../../three/forest-scene');
         const canvas = this.canvasRef.nativeElement;
         this.scene = new ForestScene(canvas, ACTIVE_ZONES.length);

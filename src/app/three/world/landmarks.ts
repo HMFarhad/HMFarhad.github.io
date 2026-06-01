@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Zone, SingleExperiencePayload, ProjectItem, BlogItem } from '../../core/content/zone.model';
+import { HOLO_FONT } from '../../core/holo-fonts';
 
 /**
  * Optional override that switches a panel from rendering its whole zone
@@ -944,7 +945,7 @@ function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): voi
   ctx.fillStyle = 'rgba(180, 240, 255, 0.45)';
   ctx.fillRect(40, H - 80, W - 80, 1);
   ctx.fillStyle = 'rgba(220, 235, 245, 0.95)';
-  ctx.font = '600 20px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '600 20px ' + HOLO_FONT;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'right';
   ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
@@ -985,7 +986,7 @@ function drawContentInto(
   // Header title. Carousel sub-panels (Experience / Projects) get a
   // section-prefixed label so each screen is clearly part of the same
   // section.
-  ctx.font = '800 40px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '800 40px ' + HOLO_FONT;
   ctx.textBaseline = 'middle';
   let headerText: string;
   if (content.kind === 'experience-item') {
@@ -1037,15 +1038,15 @@ function drawContentInto(
   switch (zone.id) {
     case 'about': {
       ctx.fillStyle = primary;
-      ctx.font = '700 80px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '700 80px ' + HOLO_FONT;
       ctx.fillText(zone.payload.name, bodyX, y); y += 92;
       ctx.fillStyle = accent;
-      wrap(zone.payload.tagline, 'italic 600 45px "Segoe UI", system-ui, sans-serif', 52, W - bodyX - 80);
+      wrap(zone.payload.tagline, 'italic 600 45px ' + HOLO_FONT, 52, W - bodyX - 80);
       y += 30;
       ctx.fillStyle = muted;
       const paragraphs = zone.payload.bio.split(/\n\s*\n/);
       for (let i = 0; i < paragraphs.length; i++) {
-        wrap(paragraphs[i], '500 40px "Segoe UI", system-ui, sans-serif', 46, W - bodyX - 80);
+        wrap(paragraphs[i], '500 40px ' + HOLO_FONT, 46, W - bodyX - 80);
         if (i < paragraphs.length - 1) y += 22;
       }
       break;
@@ -1054,14 +1055,14 @@ function drawContentInto(
       for (const it of zone.payload.items) {
         if (it.institution.toLowerCase().startsWith('language')) y += 32;
         ctx.fillStyle = primary;
-        ctx.font = '700 46px "Segoe UI", system-ui, sans-serif';
+        ctx.font = '700 46px ' + HOLO_FONT;
         ctx.fillText(it.institution, bodyX, y); y += 56;
         ctx.fillStyle = accent;
         const head = it.period ? `${it.degree} · ${it.period}` : it.degree;
-        wrap(head, '600 34px "Segoe UI", system-ui, sans-serif', 44, W - bodyX - 80);
+        wrap(head, '600 34px ' + HOLO_FONT, 44, W - bodyX - 80);
         if (it.details) {
           ctx.fillStyle = muted;
-          wrap(it.details, '400 32px "Segoe UI", system-ui, sans-serif', 42, W - bodyX - 80);
+          wrap(it.details, '400 32px ' + HOLO_FONT, 42, W - bodyX - 80);
         }
         y += 22;
         if (y > H - 90) break;
@@ -1081,10 +1082,10 @@ function drawContentInto(
         const cx = bodyX + col * colW;
         let cy = row === 0 ? rowTop0 : rowTop1;
         ctx.fillStyle = primary;
-        ctx.font = '700 38px "Segoe UI", system-ui, sans-serif';
+        ctx.font = '700 38px ' + HOLO_FONT;
         ctx.fillText(grp.name, cx, cy); cy += 50;
         ctx.fillStyle = muted;
-        ctx.font = '500 28px "Segoe UI", system-ui, sans-serif';
+        ctx.font = '500 28px ' + HOLO_FONT;
         for (const s of grp.items) {
           if (cy > H - 80) break;
           const lines = wrapText(ctx, '› ' + s, colW - 16);
@@ -1116,18 +1117,18 @@ function drawContentInto(
     }
     case 'contact': {
       ctx.fillStyle = primary;
-      ctx.font = '600 60px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '600 60px ' + HOLO_FONT;
       ctx.fillText('Let’s grab a coffee ☕', bodyX, y); y += 80;
       ctx.fillStyle = muted;
       wrap(
         'Working on a project together would be great — but even if you’re not, I’d still love to meet up, swap stories and grow the network. Reach out anytime.',
-        '400 40px "Segoe UI", system-ui, sans-serif',
+        '400 40px ' + HOLO_FONT,
         46,
         W - bodyX - 80,
       );
       y += 18;
       ctx.fillStyle = accent;
-      ctx.font = '600 38px "Segoe UI", system-ui, sans-serif';
+      ctx.font = '600 38px ' + HOLO_FONT;
       if (y < H - 110) {
         ctx.fillText('Tap a link below ↓', bodyX, y);
         y += 56;
@@ -1170,61 +1171,61 @@ function drawExperienceCard(
 
   // Role.
   ctx.fillStyle = primary;
-  ctx.font = '700 56px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '700 56px ' + HOLO_FONT;
   ctx.fillText(p.role, bodyX, y);
   y += 64;
 
   // Company + period on a single accent line.
   ctx.fillStyle = accent;
-  ctx.font = '600 32px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '600 32px ' + HOLO_FONT;
   ctx.fillText(`${p.company}  ·  ${p.period}`, bodyX, y);
   y += 46;
 
   // Blurb (italic, dim) — the platform-level description.
   ctx.fillStyle = dim;
-  wrap(p.blurb, 'italic 400 28px "Segoe UI", system-ui, sans-serif', 36);
+  wrap(p.blurb, 'italic 400 28px ' + HOLO_FONT, 36);
   y += 14;
 
   // Summary lead-in.
   ctx.fillStyle = muted;
-  wrap(p.summary, '500 30px "Segoe UI", system-ui, sans-serif', 38);
+  wrap(p.summary, '500 30px ' + HOLO_FONT, 38);
   y += 18;
 
   // Key contributions.
   ctx.fillStyle = accent;
-  ctx.font = '700 28px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '700 28px ' + HOLO_FONT;
   ctx.fillText('KEY CONTRIBUTIONS', bodyX, y);
   y += 40;
   ctx.fillStyle = muted;
   for (const h of p.highlights) {
     if (y > H - 220) break;
-    wrap('› ' + h, '400 26px "Segoe UI", system-ui, sans-serif', 34, 18);
+    wrap('› ' + h, '400 26px ' + HOLO_FONT, 34, 18);
   }
   y += 14;
 
   // Challenge / resolution call-outs.
   if (y < H - 200) {
     ctx.fillStyle = 'rgba(255, 180, 140, 1.0)';
-    ctx.font = '700 24px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '700 24px ' + HOLO_FONT;
     ctx.fillText('CHALLENGE', bodyX, y);
     y += 32;
     ctx.fillStyle = muted;
-    wrap(p.challenge, '400 26px "Segoe UI", system-ui, sans-serif', 34);
+    wrap(p.challenge, '400 26px ' + HOLO_FONT, 34);
     y += 8;
   }
   if (y < H - 140) {
     ctx.fillStyle = 'rgba(150, 235, 180, 1.0)';
-    ctx.font = '700 24px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '700 24px ' + HOLO_FONT;
     ctx.fillText('RESOLUTION', bodyX, y);
     y += 32;
     ctx.fillStyle = muted;
-    wrap(p.resolution, '400 26px "Segoe UI", system-ui, sans-serif', 34);
+    wrap(p.resolution, '400 26px ' + HOLO_FONT, 34);
     y += 10;
   }
 
   // Tech chips — rendered as outlined pills along one or more rows,
   // anchored near the bottom of the body region above the footer cue.
-  ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '600 22px ' + HOLO_FONT;
   const chipPadX = 16;
   const chipPadY = 8;
   const chipGap = 10;
@@ -1334,25 +1335,25 @@ function drawProjectCard(
   // Category eyebrow.
   if (p.category) {
     ctx.fillStyle = accent;
-    ctx.font = '700 22px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '700 22px ' + HOLO_FONT;
     ctx.fillText(p.category.toUpperCase(), bodyX, y);
     y += 32;
   }
 
   // Project name (allow wrap for long titles).
   ctx.fillStyle = primary;
-  wrap(p.name, '700 48px "Segoe UI", system-ui, sans-serif', 58);
+  wrap(p.name, '700 48px ' + HOLO_FONT, 58);
   y += 8;
 
   // Blurb body.
   ctx.fillStyle = muted;
-  wrap(p.blurb, '400 28px "Segoe UI", system-ui, sans-serif', 36);
+  wrap(p.blurb, '400 28px ' + HOLO_FONT, 36);
   y += 14;
 
   // Link callout (Visit Site / GitHub / View Paper).
   if (p.link) {
     const label = (p.linkLabel ?? 'Visit Site') + '  \u2197';
-    ctx.font = '700 24px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '700 24px ' + HOLO_FONT;
     const linkPadX = 18;
     const linkH = 40;
     const linkW = ctx.measureText(label).width + linkPadX * 2;
@@ -1381,7 +1382,7 @@ function drawProjectCard(
   }
 
   // Tech chips along the bottom.
-  ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '600 22px ' + HOLO_FONT;
   const chipPadX = 16;
   const chipGap = 10;
   const chipH = 36;
@@ -1462,25 +1463,25 @@ function drawBlogCard(
 
   // Eyebrow: published date \u00b7 read time.
   ctx.fillStyle = accent;
-  ctx.font = '700 22px "Segoe UI", system-ui, sans-serif';
+  ctx.font = '700 22px ' + HOLO_FONT;
   const eyebrow = b.readTime ? `${b.date}  \u00b7  ${b.readTime}` : b.date;
   ctx.fillText(eyebrow, bodyX, y);
   y += 34;
 
   // Title.
   ctx.fillStyle = primary;
-  wrap(b.title, '700 44px "Segoe UI", system-ui, sans-serif', 54, 3);
+  wrap(b.title, '700 44px ' + HOLO_FONT, 54, 3);
   y += 10;
 
   // Excerpt.
   ctx.fillStyle = muted;
-  wrap(b.excerpt, '400 28px "Segoe UI", system-ui, sans-serif', 36, 10);
+  wrap(b.excerpt, '400 28px ' + HOLO_FONT, 36, 10);
   y += 18;
 
   // "Read on Medium" pill \u2014 hit-region registered for click handling.
   if (b.url) {
     const label = 'Read on Medium  \u2197';
-    ctx.font = '700 24px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '700 24px ' + HOLO_FONT;
     const linkPadX = 18;
     const linkH = 42;
     const linkW = ctx.measureText(label).width + linkPadX * 2;
@@ -1508,7 +1509,7 @@ function drawBlogCard(
 
   // Tag chips along the bottom.
   if (b.tags && b.tags.length) {
-    ctx.font = '600 22px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '600 22px ' + HOLO_FONT;
     const chipPadX = 16;
     const chipGap = 10;
     const chipH = 34;
