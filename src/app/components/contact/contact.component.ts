@@ -54,8 +54,14 @@ export class ContactComponent {
           throw new Error(response?.error || 'Failed to send email');
         }
       } catch (error: any) {
-        console.error('Email sending error:', error);
-        
+        // The "EmailJS not configured" path is an expected fallback, not
+        // a bug — log it as info so it doesn't pollute the error console.
+        if (error?.status === 0) {
+          console.info('EmailJS not configured, using mailto fallback.');
+        } else {
+          console.error('Email sending error:', error);
+        }
+
         // Fallback to mailto if EmailJS is not configured or fails
         if (error.status === 0 || !error.success) {
           this.openMailtoFallback();

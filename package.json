@@ -4,6 +4,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "inject:env": "node scripts/inject-env.mjs",
+    "prestart": "npm run inject:env",
+    "prebuild": "npm run inject:env",
+    "prewatch": "npm run inject:env",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
