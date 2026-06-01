@@ -67,6 +67,11 @@ jobs:
 
       - name: Build legacy (/legacy/)
         working-directory: legacy
+        env:
+          EMAILJS_PUBLIC_KEY: ${{ secrets.EMAILJS_PUBLIC_KEY }}
+          EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
+          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
+          EMAILJS_AUTOREPLY_TEMPLATE_ID: ${{ secrets.EMAILJS_AUTOREPLY_TEMPLATE_ID }}
         run: npx ng build --base-href=/legacy/
 
       - name: Locate legacy output
