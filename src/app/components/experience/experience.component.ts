@@ -25,7 +25,7 @@ export class ExperienceComponent {
     {
       position: 'Software Engineer (Freelance)',
       company: 'AdvancePro Technologies',
-      duration: 'January 2023 – Present',
+      duration: 'January 2023 – September 2025',
       description: 'Leading backend development of AdvancePro inventory management system.',
       achievements: [
         'Developed complete backend architecture with optimized performance',
