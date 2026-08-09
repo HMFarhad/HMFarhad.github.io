@@ -1,6 +1,5 @@
 import { Component, OnInit, PLATFORM_ID, inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-entry',
@@ -8,7 +7,7 @@ import { Router } from '@angular/router';
   template: `
     <main class="entry">
       <h1>Loading…</h1>
-      <p>Choosing the best experience for your device.</p>
+      <p>Redirecting to the normal site.</p>
     </main>
   `,
   styles: [`
@@ -18,13 +17,10 @@ import { Router } from '@angular/router';
   `]
 })
 export class EntryComponent implements OnInit {
-  private router = inject(Router);
   private platformId = inject(PLATFORM_ID);
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const target = reduced ? '/page' : '/experience';
-    this.router.navigateByUrl(target, { replaceUrl: true });
+    window.location.replace('/legacy/');
   }
 }
