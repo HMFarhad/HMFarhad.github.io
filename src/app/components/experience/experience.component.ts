@@ -23,6 +23,21 @@ interface Experience {
 export class ExperienceComponent {
   experiences: Experience[] = [
     {
+      position: 'Trainee Software Engineer',
+      company: 'Nexetic Oy',
+      duration: 'March 2026 – Present',
+      description: 'Contributing production features to a Microsoft 365 backup SaaS platform through a six-month Saranen training programme.',
+      achievements: [
+        'Develop full-stack features using C#, .NET, Angular, EF Core, Azure Functions, and SQL',
+        'Implemented security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging, and automated tests',
+        'Built reporting and migration-verification tools and contributed to OpenAPI/NSwag contracts, code reviews, documentation, and CI/CD workflows'
+      ],
+      challenges: 'Delivering secure, tenant-isolated backup and reporting features while learning a complex production codebase',
+      improvements: 'Traced end-to-end data flows, implemented tested backend and frontend changes, and documented operational workflows for review and support',
+      technologies: ['C# / .NET', 'Angular / TypeScript', 'EF Core / SQL', 'Azure Functions', 'OpenAPI / NSwag'],
+      icon: 'fas fa-code'
+    },
+    {
       position: 'Software Engineer (Freelance)',
       company: 'AdvancePro Technologies',
       duration: 'January 2023 – September 2025',
