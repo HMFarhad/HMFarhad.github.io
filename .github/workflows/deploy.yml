@@ -53,11 +53,11 @@ jobs:
       - name: Locate Redesign output
         id: redesign_out
         run: |
-          DIR=$(find redesign/dist -maxdepth 3 -type d -name browser | head -n 1)
-          if [ -z "$DIR" ]; then
-            DIR=$(find redesign/dist -maxdepth 3 -type d -name 'portfolio*' | head -n 1)
+          DIR=redesign/dist/portfolio/browser
+          if [ ! -d "$DIR" ]; then
+            DIR=$(find redesign/dist -maxdepth 3 -type d -name browser | head -n 1)
           fi
-          test -n "$DIR"
+          test -d "$DIR"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: Checkout main branch
@@ -84,11 +84,11 @@ jobs:
       - name: Locate main output
         id: legacy_out
         run: |
-          DIR=$(find legacy/dist -maxdepth 3 -type d -name browser | head -n 1)
-          if [ -z "$DIR" ]; then
-            DIR=$(find legacy/dist -maxdepth 3 -mindepth 2 -type d | head -n 1)
+          DIR=legacy/dist/portfolio-website/browser
+          if [ ! -d "$DIR" ]; then
+            DIR=$(find legacy/dist -maxdepth 3 -type d -name browser | head -n 1)
           fi
-          test -n "$DIR"
+          test -d "$DIR"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: Merge site outputs
