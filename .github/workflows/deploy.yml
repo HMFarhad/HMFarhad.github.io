@@ -1,0 +1,110 @@
+name: Deploy unified site to GitHub Pages
+
+# Build the 3D experience from Redesign and the normal site from main, then
+# publish them together. The normal site is available at /legacy/ and the 3D
+# experience is available at /experience.
+on:
+  push:
+    branches: [main, Redesign]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout Redesign branch
+        uses: actions/checkout@v4
+        with:
+          ref: Redesign
+          path: redesign
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Redesign dependencies
+        working-directory: redesign
+        run: npm ci
+
+      - name: Build Redesign
+        working-directory: redesign
+        env:
+          EMAILJS_PUBLIC_KEY: ${{ secrets.EMAILJS_PUBLIC_KEY }}
+          EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
+          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
+          EMAILJS_AUTOREPLY_TEMPLATE_ID: ${{ secrets.EMAILJS_AUTOREPLY_TEMPLATE_ID }}
+        run: |
+          npm run inject:env
+          npx ng build --base-href=/ --configuration production
+
+      - name: Locate Redesign output
+        id: redesign_out
+        run: |
+          DIR=$(find redesign/dist -maxdepth 3 -type d -name browser | head -n 1)
+          if [ -z "$DIR" ]; then
+            DIR=$(find redesign/dist -maxdepth 3 -type d -name 'portfolio*' | head -n 1)
+          fi
+          test -n "$DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: legacy
+
+      - name: Install main dependencies
+        working-directory: legacy
+        run: npm ci
+
+      - name: Build main site
+        working-directory: legacy
+        env:
+          EMAILJS_PUBLIC_KEY: ${{ secrets.EMAILJS_PUBLIC_KEY }}
+          EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
+          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
+          EMAILJS_AUTOREPLY_TEMPLATE_ID: ${{ secrets.EMAILJS_AUTOREPLY_TEMPLATE_ID }}
+        run: |
+          npm run inject:env
+          npx ng build --base-href=/legacy/ --configuration production
+
+      - name: Locate main output
+        id: legacy_out
+        run: |
+          DIR=$(find legacy/dist -maxdepth 3 -type d -name browser | head -n 1)
+          if [ -z "$DIR" ]; then
+            DIR=$(find legacy/dist -maxdepth 3 -mindepth 2 -type d | head -n 1)
+          fi
+          test -n "$DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Merge site outputs
+        run: |
+          mkdir -p _site
+          cp -r "${{ steps.redesign_out.outputs.dir }}/." _site/
+          mkdir -p _site/legacy
+          cp -r "${{ steps.legacy_out.outputs.dir }}/." _site/legacy/
+          cp _site/index.html _site/404.html
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
