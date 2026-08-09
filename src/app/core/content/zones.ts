@@ -87,6 +87,27 @@ export const ZONES: Zone[] = [
       // at the Experience station so the walker passes them in sequence.
       items: [
         {
+          role: 'Trainee Software Engineer',
+          company: 'Nexetic Oy',
+          blurb: 'Finnish SaaS company providing Microsoft 365 backup and recovery solutions.',
+          period: 'March 2026 – Present',
+          summary: 'Contributing production features to a Microsoft 365 backup SaaS platform through a six-month Saranen training programme.',
+          highlights: [
+            'Develop full-stack features using C#, .NET, Angular, EF Core, Azure Functions, and SQL',
+            'Implemented security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging, and automated tests',
+            'Built reporting and migration-verification tools and contributed to OpenAPI/NSwag contracts, code reviews, documentation, and CI/CD workflows'
+          ],
+          challenge: 'Delivering secure, tenant-isolated backup and reporting features while learning a complex production codebase',
+          resolution: 'Traced end-to-end data flows, implemented tested backend and frontend changes, and documented operational workflows for review and support',
+          tech: [
+            'C# / .NET',
+            'Angular / TypeScript',
+            'EF Core / SQL',
+            'Azure Functions',
+            'OpenAPI / NSwag'
+          ]
+        },
+        {
           role: 'Software Engineer (Freelance)',
           company: 'AdvancePro Technologies',
           blurb: 'Canadian SaaS inventory management platform integrated with Shopify, WooCommerce, and QuickBooks.',
