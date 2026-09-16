@@ -53,7 +53,7 @@ export class ProfileDataService {
   private profileData: ProfileData = {
     personalInfo: {
       name: 'Hossain MD Farhad',
-      title: 'Full Stack Web Developer',
+      title: 'Software Engineer at Nexetic Oy',
       location: 'Helsinki, Finland',
       email: 'hssnmd.farhad@gmail.com',
       phone: '+358402467814',
@@ -74,11 +74,24 @@ export class ProfileDataService {
     },
     experience: [
       {
-        company: 'AdvancePro Technologies',
-        position: 'Senior Software Engineer (Freelance)',
-        duration: 'January 2023 – Present',
-        startDate: '2023-01',
+        company: 'Nexetic Oy',
+        position: 'Software Engineer',
+        duration: 'September 2026 – Present',
+        startDate: '2026-09',
         endDate: 'Present',
+        technologies: ['C#', '.NET', 'Angular', 'EF Core', 'Azure Functions', 'SQL'],
+        achievements: [
+          'Contributed production features to a Microsoft 365 backup SaaS platform',
+          'Implemented Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging, and automated tests',
+          'Built reporting and migration-verification tools'
+        ]
+      },
+      {
+        company: 'AdvancePro Technologies',
+        position: 'Software Engineer (Freelance)',
+        duration: 'January 2023 – September 2025',
+        startDate: '2023-01',
+        endDate: '2025-09',
         technologies: ['C#', '.NET Core', 'SQL Server', 'RESTful APIs', 'Shopify API'],
         achievements: [
           'Developed complete backend architecture with optimized performance',
@@ -88,7 +101,7 @@ export class ProfileDataService {
       },
       {
         company: 'MobilityOne Sdn Bhd',
-        position: 'Senior .NET Programmer',
+        position: '.NET Programmer',
         duration: 'December 2022 – August 2024',
         startDate: '2022-12',
         endDate: '2024-08',

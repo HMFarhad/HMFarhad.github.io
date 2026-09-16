@@ -23,10 +23,10 @@ interface Experience {
 export class ExperienceComponent {
   experiences: Experience[] = [
     {
-      position: 'Trainee Software Engineer',
+      position: 'Software Engineer',
       company: 'Nexetic Oy',
-      duration: 'March 2026 – Present',
-      description: 'Contributing production features to a Microsoft 365 backup SaaS platform through a six-month Saranen training programme.',
+      duration: 'September 2026 – Present',
+      description: 'Contributing production features to a Microsoft 365 backup SaaS platform.',
       achievements: [
         'Develop full-stack features using C#, .NET, Angular, EF Core, Azure Functions, and SQL',
         'Implemented security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging, and automated tests',
@@ -70,7 +70,7 @@ export class ExperienceComponent {
     {
       position: 'Software Engineer',
       company: 'Prime Tech Solution Limited',
-      duration: 'March 2018 – December 2020',
+      duration: 'March 2018 – December 2022',
       description: 'Developed testable code and deployed software systems.',
       achievements: [
         'Built backend APIs for .NET Core & Angular e-commerce application',
