@@ -1,8 +1,81 @@
-html, body {
-  margin: 0; padding: 0; height: 100%;
-  background: #0a0c0b;
-  color: #e8efe7;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@font-face {
+  font-family: 'DM Sans';
+  src: url('/assets/fonts/dm-sans.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
 }
-*, *::before, *::after { box-sizing: border-box; }
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('/assets/fonts/space-grotesk.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+:root {
+  --bg: #111310;
+  --surface: #1a1d17;
+  --text: #f0f1e8;
+  --muted: #a9aea1;
+  --accent: #d5f79a;
+  --line: #34382d;
+  --display: 'Space Grotesk', 'Helvetica Neue', sans-serif;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input,
+textarea {
+  font: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+}
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

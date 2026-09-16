@@ -7,7 +7,7 @@ export const ZONES: Zone[] = [
     enabled: true,
     payload: {
       name: 'Hossain Mohammad Farhad',
-      tagline: 'Full Stack Web Developer | C# .NET Core, Angular, MSSQL | Scalable API & Cloud Solutions',
+      tagline: 'Software Engineer at Nexetic Oy | C# .NET, Angular & Cloud Solutions',
       // Paragraphs are separated by blank lines. The HTML page renders this
       // with `white-space: pre-line`; the 3D landmark in landmarks.ts splits
       // on the same blank-line marker to lay out one paragraph at a time.
@@ -87,11 +87,11 @@ export const ZONES: Zone[] = [
       // at the Experience station so the walker passes them in sequence.
       items: [
         {
-          role: 'Trainee Software Engineer',
+          role: 'Software Engineer',
           company: 'Nexetic Oy',
           blurb: 'Finnish SaaS company providing Microsoft 365 backup and recovery solutions.',
-          period: 'March 2026 – Present',
-          summary: 'Contributing production features to a Microsoft 365 backup SaaS platform through a six-month Saranen training programme.',
+          period: 'September 2026 – Present',
+          summary: 'Contributing production features to a Microsoft 365 backup SaaS platform.',
           highlights: [
             'Develop full-stack features using C#, .NET, Angular, EF Core, Azure Functions, and SQL',
             'Implemented security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging, and automated tests',
@@ -141,7 +141,7 @@ export const ZONES: Zone[] = [
           role: 'Software Engineer',
           company: 'Prime Tech Solution Limited',
           blurb: 'A premier provider of technology-driven services.',
-          period: 'March 2018 – December 2020',
+          period: 'March 2018 – December 2022',
           summary: 'Developed testable code and deployed software systems.',
           highlights: [
             'Built backend APIs for .NET Core & Angular e-commerce application',

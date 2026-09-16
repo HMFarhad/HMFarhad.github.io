@@ -33,7 +33,7 @@
 
     @if (isExperience(z) && z.id === 'experience') {
       <ul class="cards">
-        @for (i of z.payload.items; track i.company) {
+        @for (i of z.payload.items; track i.company + i.role) {
           <li>
             <strong>{{ i.role }}</strong> — {{ i.company }}
             <div class="muted">{{ i.period }}</div>
@@ -42,8 +42,8 @@
             <ul>
               @for (h of i.highlights; track h) { <li>{{ h }}</li> }
             </ul>
-            <p><strong>Challenge:</strong> {{ i.challenge }}</p>
-            <p><strong>Resolution:</strong> {{ i.resolution }}</p>
+            @if (i.challenge) { <p><strong>Challenge:</strong> {{ i.challenge }}</p> }
+            @if (i.resolution) { <p><strong>Resolution:</strong> {{ i.resolution }}</p> }
             <div class="tags">
               @for (t of i.tech; track t) { <span>{{ t }}</span> }
             </div>

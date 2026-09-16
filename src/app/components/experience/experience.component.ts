@@ -1,296 +1,166 @@
 import {
-  Component, AfterViewInit, OnDestroy, ElementRef, ViewChild,
-  PLATFORM_ID, NgZone, inject, signal
+  Component,
+  AfterViewInit,
+  OnDestroy,
+  ElementRef,
+  ViewChild,
+  PLATFORM_ID,
+  NgZone,
+  InjectionToken,
+  inject,
+  signal,
+  computed,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ACTIVE_ZONES } from '../../core/content/zones';
-import type { Zone } from '../../core/content/zone.model';
-import { isMobileLayout } from '../../core/device';
-import { ensureHoloFonts } from '../../core/holo-fonts';
+import { ZONES } from '../../core/content/zones';
 import { EmailService, ContactFormData } from '../../core/email.service';
+import type { SculptureScene } from '../../three/sculpture-scene';
+
+export const SCULPTURE_LOADER = new InjectionToken<
+  () => Promise<typeof import('../../three/sculpture-scene')>
+>('SCULPTURE_LOADER', {
+  providedIn: 'root',
+  factory: () => () => import('../../three/sculpture-scene'),
+});
 
 @Component({
   selector: 'app-experience',
   standalone: true,
   imports: [FormsModule],
-  host: { ngSkipHydration: 'true' },
   templateUrl: './experience.component.html',
-  styleUrl: './experience.component.scss'
+  styleUrl: './experience.component.scss',
 })
 export class ExperienceComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
-
   private platformId = inject(PLATFORM_ID);
-  private zone       = inject(NgZone);
-  private email      = inject(EmailService);
+  private zone = inject(NgZone);
+  private loadScene = inject(SCULPTURE_LOADER);
+  private email = inject(EmailService);
+  private scene: SculptureScene | null = null;
+  private destroyed = false;
+  private motionQuery?: MediaQueryList;
+  private readonly onMotionChange = () => {
+    this.motion.set(!this.motionQuery?.matches);
+    this.scene?.setMotion(this.motion());
+  };
 
-  private scene: any = null;
-  private detachInput: (() => void) | null = null;
-
-  zones: Zone[] = ACTIVE_ZONES;
-  activeIndex = signal(0);
-  hoverIndex  = signal<number | null>(null);
-  showHint    = signal(true);
-  isMobile    = signal(false);
-
-  // Contact form state.
+  menuOpen = signal(false);
+  motion = signal(true);
+  sceneReady = signal(false);
+  sceneFailed = signal(false);
+  formOpen = signal(false);
+  shape = signal(0);
+  shapes = ['Flow', 'Orbit', 'Structure'];
+  showAll = signal(false);
+  category = signal('All');
+  readonly projects = ZONES.find((z) => z.id === 'projects')!.payload.items;
+  readonly experience = ZONES.find((z) => z.id === 'experience')!.payload.items;
+  readonly education = ZONES.find((z) => z.id === 'education')!.payload.items;
+  readonly skills = ZONES.find((z) => z.id === 'skills')!.payload.groups;
+  readonly blogs = ZONES.find((z) => z.id === 'blogs')!.payload.items;
+  readonly about = ZONES.find((z) => z.id === 'about')!.payload;
+  readonly categories = ['All', ...new Set(this.projects.map((p) => p.category!))];
+  readonly visibleProjects = computed(() => {
+    if (!this.showAll()) return this.projects.slice(0, 3);
+    return this.category() === 'All'
+      ? this.projects
+      : this.projects.filter((p) => p.category === this.category());
+  });
+  readonly currentYear = new Date().getFullYear();
+  readonly emailConfigured = this.email.isConfigured;
   form: ContactFormData = { name: '', email: '', subject: '', message: '' };
-  formOpen     = signal(false);
-  isSubmitting = signal(false);
-  submitMsg    = signal('');
-  submitOk     = signal<boolean | null>(null);
-  emailConfigured = signal(false);
+  submitting = signal(false);
+  submitMessage = signal('');
+  submitError = signal(false);
 
-  private mobileMq: MediaQueryList | null = null;
-  private onMobileMqChange: ((e: MediaQueryListEvent) => void) | null = null;
-
-  ngAfterViewInit(): void {
+  async ngAfterViewInit(): Promise<void> {
     if (!isPlatformBrowser(this.platformId)) return;
-
-    this.isMobile.set(isMobileLayout());
-    this.mobileMq = window.matchMedia('(max-width: 768px), (pointer: coarse)');
-    this.onMobileMqChange = () => this.isMobile.set(isMobileLayout());
-    this.mobileMq.addEventListener('change', this.onMobileMqChange);
-
-    // Run three.js outside Angular zone so its rAF loop doesn't trigger CD.
-    this.zone.runOutsideAngular(() => {
-      // Defer one frame so hydration finishes before WebGL binds the canvas.
-      requestAnimationFrame(async () => {
-        await ensureHoloFonts();
-        const { ForestScene } = await import('../../three/forest-scene');
-        const canvas = this.canvasRef.nativeElement;
-        this.scene = new ForestScene(canvas, ACTIVE_ZONES.length);
-
-        this.scene.onActiveZoneChange = (idx: number) => {
-          // Bring back into zone for signal -> view.
-          this.zone.run(() => this.activeIndex.set(idx));
-        };
-        this.scene.onLandmarkHover = (idx: number | null) => {
-          this.zone.run(() => this.hoverIndex.set(idx));
-        };
-
-        this.detachInput = this.attachInput(canvas);
+    this.motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+    this.onMotionChange();
+    this.motionQuery.addEventListener('change', this.onMotionChange);
+    try {
+      const { SculptureScene } = await this.loadScene();
+      if (this.destroyed) return;
+      this.zone.runOutsideAngular(() => {
+        this.scene = new SculptureScene(this.canvasRef.nativeElement, this.motion(), () => {
+          this.zone.run(() => {
+            this.sceneReady.set(false);
+            this.sceneFailed.set(true);
+          });
+        });
       });
-    });
+      this.sceneReady.set(true);
+    } catch {
+      this.sceneFailed.set(true);
+    }
   }
-
   ngOnDestroy(): void {
-    if (this.mobileMq && this.onMobileMqChange) {
-      this.mobileMq.removeEventListener('change', this.onMobileMqChange);
-    }
-    this.detachInput?.();
-    this.scene?.dispose?.();
-    this.scene = null;
+    this.destroyed = true;
+    this.motionQuery?.removeEventListener('change', this.onMotionChange);
+    this.scene?.dispose();
   }
-
-  // ---------------- input ----------------
-  private attachInput(canvas: HTMLCanvasElement): () => void {
-    const scrollRange = 9000;
-    const touchMul    = this.isMobile() ? 1.55 : 1.2;
-    const tapSlop     = 12;
-
-    let touchY: number | null = null;
-    let touchX: number | null = null;
-    let touchMoved = false;
-    let lastTouchPickAt = 0;
-
-    const pointerFromClient = (clientX: number, clientY: number) => {
-      const r = canvas.getBoundingClientRect();
-      return {
-        x: ((clientX - r.left) / r.width)  *  2 - 1,
-        y: ((clientY - r.top)  / r.height) * -2 + 1,
-      };
-    };
-    const activateAtPointer = () => {
-      const url = this.scene?.pickLink();
-      if (url) {
-        window.open(url, '_blank', 'noopener');
-        return;
-      }
-      const idx = this.scene?.pickStation();
-      if (typeof idx === 'number') this.scene?.jumpToStation(idx);
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      this.showHint.set(false);
-      this.scene?.addScrollDelta(e.deltaY / scrollRange);
-    };
-    const onTouchStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (!t) return;
-      touchX = t.clientX;
-      touchY = t.clientY;
-      touchMoved = false;
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (touchY == null || touchX == null) return;
-      const t = e.touches[0];
-      if (!t) return;
-      const dx = t.clientX - touchX;
-      const dy = t.clientY - touchY;
-      if (Math.abs(dx) > tapSlop || Math.abs(dy) > tapSlop) touchMoved = true;
-      e.preventDefault();
-      this.showHint.set(false);
-      this.scene?.addScrollDelta((-dy * touchMul) / scrollRange);
-      touchX = t.clientX;
-      touchY = t.clientY;
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      if (!touchMoved) {
-        const t = e.changedTouches[0];
-        if (t) {
-          const p = pointerFromClient(t.clientX, t.clientY);
-          this.scene?.setPointer(p.x, p.y);
-          lastTouchPickAt = performance.now();
-          activateAtPointer();
-        }
-      }
-      touchX = null;
-      touchY = null;
-      touchMoved = false;
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      const p = pointerFromClient(e.clientX, e.clientY);
-      this.scene?.setPointer(p.x, p.y);
-    };
-    const onClick = (e: MouseEvent) => {
-      if (performance.now() - lastTouchPickAt < 400) return;
-      const p = pointerFromClient(e.clientX, e.clientY);
-      this.scene?.setPointer(p.x, p.y);
-      activateAtPointer();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      const last = this.zones.length - 1;
-      const cur  = this.activeIndex();
-      switch (e.key) {
-        case 'PageDown':
-        case 'ArrowDown':
-        case 'ArrowRight':
-          e.preventDefault();
-          this.scene?.jumpToStation(Math.min(last, cur + 1));
-          break;
-        case 'PageUp':
-        case 'ArrowUp':
-        case 'ArrowLeft':
-          e.preventDefault();
-          this.scene?.jumpToStation(Math.max(0, cur - 1));
-          break;
-        case 'Home':
-          e.preventDefault();
-          this.scene?.jumpToStation(0);
-          break;
-        case 'End':
-          e.preventDefault();
-          this.scene?.jumpToStation(last);
-          break;
-      }
-    };
-
-    canvas.addEventListener('wheel',      onWheel,      { passive: false });
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true  });
-    canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
-    canvas.addEventListener('touchend',   onTouchEnd,   { passive: true  });
-    canvas.addEventListener('mousemove',  onMouseMove);
-    canvas.addEventListener('click',      onClick);
-    window.addEventListener('keydown',    onKey);
-
-    return () => {
-      canvas.removeEventListener('wheel',      onWheel);
-      canvas.removeEventListener('touchstart', onTouchStart);
-      canvas.removeEventListener('touchmove',  onTouchMove);
-      canvas.removeEventListener('touchend',   onTouchEnd);
-      canvas.removeEventListener('mousemove',  onMouseMove);
-      canvas.removeEventListener('click',      onClick);
-      window.removeEventListener('keydown',    onKey);
-    };
+  selectShape(index: number): void {
+    this.shape.set(index);
+    this.scene?.setShape(index);
   }
-
-  // Helper for HUD: zone title at index.
-  zoneTitle(i: number | null): string | null {
-    if (i == null || i < 0 || i >= this.zones.length) return null;
-    return this.zones[i].title;
+  toggleMotion(): void {
+    this.motion.update((v) => !v);
+    this.scene?.setMotion(this.motion());
   }
-
-  /** True when the walker is parked at the Contact zone. */
-  isContactActive(): boolean {
-    const z = this.zones[this.activeIndex()];
-    return !!z && z.id === 'contact';
+  closeMenu(): void {
+    this.menuOpen.set(false);
   }
-
-  /** Navigate to a zone via the mini-map. */
-  goToZone(i: number): void {
-    this.scene?.jumpToStation?.(i);
+  projectTitle(name: string): string {
+    return name.split(' — ')[0];
   }
-
-  /** Email + clickable links to render as a real DOM overlay. */
-  contactLinks(): { email: string; links: { label: string; url: string }[] } | null {
-    const z = this.zones.find((zz) => zz.id === 'contact');
-    if (!z || z.id !== 'contact') return null;
-    return { email: z.payload.email, links: z.payload.links };
+  projectSummary(index: number, blurb: string): string {
+    if (!this.showAll())
+      return [
+        'Connecting inventory, payments, and commerce for 200+ businesses. A focused API redesign made everything move faster.',
+        'Making municipal payments work reliably. Automated settlements turn hundreds of daily transactions into completed payments.',
+        'Bringing real-time visibility to a distribution network of 4,500 distributors and 200,000 retailers.',
+      ][index];
+    return blurb;
   }
-
-  // ---------------- contact form ----------------
-
-  toggleForm(): void {
-    this.emailConfigured.set(this.email.isConfigured);
-    this.formOpen.update((v) => !v);
-    if (!this.formOpen()) this.clearStatus();
-  }
-
-  closeForm(): void {
-    this.formOpen.set(false);
-    this.clearStatus();
-  }
-
-  private clearStatus(): void {
-    this.submitMsg.set('');
-    this.submitOk.set(null);
-  }
-
   formValid(): boolean {
-    const f = this.form;
-    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return !!(f.name.trim() && emailRe.test(f.email.trim())
-      && f.subject.trim() && f.message.trim().length >= 5);
-  }
-
-  async onSubmit(): Promise<void> {
-    if (this.isSubmitting() || !this.formValid()) return;
-    this.isSubmitting.set(true);
-    this.clearStatus();
-
-    const res = await this.email.send({
-      name:    this.form.name.trim(),
-      email:   this.form.email.trim(),
-      subject: this.form.subject.trim(),
-      message: this.form.message.trim()
-    });
-
-    if (res.success) {
-      this.submitOk.set(true);
-      this.submitMsg.set(`Thanks ${this.form.name.split(' ')[0]} — your message is on its way.`);
-      this.form = { name: '', email: '', subject: '', message: '' };
-    } else if (res.notConfigured) {
-      this.openMailto();
-    } else {
-      this.submitOk.set(false);
-      this.submitMsg.set(res.error || 'Something went wrong. Please try again.');
-    }
-    this.isSubmitting.set(false);
-  }
-
-  private openMailto(): void {
-    const c = this.contactLinks();
-    if (!c) return;
-    const subject = encodeURIComponent(this.form.subject || 'Hello from your portfolio');
-    const body = encodeURIComponent(
-      `Name: ${this.form.name}\nEmail: ${this.form.email}\n\n${this.form.message}`
+    return !!(
+      this.form.name.trim() &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.form.email.trim()) &&
+      this.form.subject.trim() &&
+      this.form.message.trim().length >= 5
     );
-    window.open(`mailto:${c.email}?subject=${subject}&body=${body}`, '_blank');
-    this.submitOk.set(true);
-    this.submitMsg.set('Opening your email client…');
+  }
+  async onSubmit(): Promise<void> {
+    if (this.submitting() || !this.formValid()) return;
+    this.submitMessage.set('');
+    this.submitError.set(false);
+    if (!this.emailConfigured) {
+      const body =
+        'Name: ' + this.form.name + '\nEmail: ' + this.form.email + '\n\n' + this.form.message;
+      window.location.href =
+        'mailto:hssnmd.farhad@gmail.com?subject=' +
+        encodeURIComponent(this.form.subject) +
+        '&body=' +
+        encodeURIComponent(body);
+      this.submitMessage.set(
+        'Your email draft is ready in your email app. Send it there to complete your message.',
+      );
+      return;
+    }
+    this.submitting.set(true);
+    try {
+      const result = await this.email.send(this.form);
+      if (!result.success) throw new Error(result.error);
+      this.submitMessage.set('Thanks for reaching out. Your message has been sent.');
+      this.form = { name: '', email: '', subject: '', message: '' };
+    } catch {
+      this.submitError.set(true);
+      this.submitMessage.set(
+        'Your message could not be sent. Please try again or email me directly.',
+      );
+    } finally {
+      this.submitting.set(false);
+    }
   }
 }

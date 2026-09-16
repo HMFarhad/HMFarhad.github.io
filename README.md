@@ -1,59 +1,44 @@
-# Portfolio
+# Farhad — portfolio
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.13.
+Angular 21 portfolio with a progressively enhanced Three.js sculpture, accessible HTML content, and a text-only route.
 
-## Development server
+## Local development
 
-To start a local development server, run:
-
-```bash
-ng serve
+```sh
+npm ci
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Open http://localhost:4200. Both `/` and `/experience` show the redesigned portfolio. `/page` offers the text version. The deployment workflow also assembles the separate `main` branch under `/legacy/`.
 
-## Code scaffolding
+## Content
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+- Career, project, education and writing records: `src/app/core/content/zones.ts`.
+- Main experience: `src/app/components/experience/`.
+- Procedural 3D sculpture: `src/app/three/sculpture-scene.ts`.
+- Downloadable resume: `public/assets/documents/Hossain_MD_Farhad_Resume.pdf`.
+- Resume builder: `python3 scripts/build-resume.py` (requires ReportLab).
+- Fonts are hosted locally; their OFL licenses are included alongside them.
 
-```bash
-ng generate component component-name
+The current role is Software Engineer at Nexetic Oy, September 2026–present. Prime Tech ends December 2022, as confirmed by the owner.
+
+## Behavior
+
+The hero offers three sculptures, pointer interaction, and a pause control. Reduced motion is honored, and animation stops when the hero is outside the viewport or the tab is hidden. Written content is prerendered and does not require WebGL. If rendering is unavailable, a static composition takes its place.
+
+The project archive preserves all 16 projects with category filtering. Career details expand independently. The contact form uses the existing EmailJS configuration when available and otherwise prepares a draft in the visitor’s email app; it never reports an unsent draft as delivered.
+
+## Validation
+
+```sh
+npm test -- --watch=false
+npm run build
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Unit checks cover navigation, project filtering, reduced motion controls, fallback content, and form submission states. Build checks prerender `/`, `/experience`, and `/page`. Browser visual review remains necessary before release; automated browser access was blocked by an unavailable browser security check during this update.
 
-```bash
-ng generate --help
-```
+The whole-page component stylesheet has a 20 kB warning / 24 kB error budget; the production stylesheet is about 18 kB before transfer compression. The sculpture engine is loaded separately from the initial application.
 
-## Building
+## Publishing
 
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+The existing GitHub Pages workflow combines the `Redesign` branch with `main`. Apply the modern UI changes to `Redesign` and the companion profile/resume changes to `main` before deploying. The work is currently local and has not been published.

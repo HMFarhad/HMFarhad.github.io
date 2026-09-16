@@ -5,7 +5,7 @@ export const routes: Routes = [
     path: '',
     pathMatch: 'full',
     loadComponent: () =>
-      import('./components/entry/entry.component').then((m) => m.EntryComponent)
+      import('./components/experience/experience.component').then((m) => m.ExperienceComponent)
   },
   {
     path: 'experience',
