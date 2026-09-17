@@ -1,6 +1,6 @@
-# Farhad — portfolio
+# Farhad — forest portfolio
 
-Angular 21 portfolio with a progressively enhanced Three.js sculpture, accessible HTML content, and a text-only route.
+Angular 21 and Three.js portfolio on `codex/modern-3d`. The original forest route, seven holographic stops, projector rings and zone map are preserved. The separate `main` branch is not part of this design change.
 
 ## Local development
 
@@ -9,24 +9,26 @@ npm ci
 npm start
 ```
 
-Open http://localhost:4200. Both `/` and `/experience` show the redesigned portfolio. `/page` offers the text version. The deployment workflow also assembles the separate `main` branch under `/legacy/`.
+Both `/` and `/experience` open the forest. `/page` provides the text portfolio and works without WebGL. The deployment workflow also assembles the separate main site under `/legacy/`.
 
-## Content
+## Content and implementation
 
-- Career, project, education and writing records: `src/app/core/content/zones.ts`.
-- Main experience: `src/app/components/experience/`.
-- Procedural 3D sculpture: `src/app/three/sculpture-scene.ts`.
+- All authored career, project, education and writing records remain in `src/app/core/content/zones.ts`.
+- Forest interface: `src/app/components/experience/`.
+- Camera, route and scene lifecycle: `src/app/three/forest-scene.ts`.
+- Original forest, lighting and holograms: `src/app/three/world/`.
 - Downloadable resume: `public/assets/documents/Hossain_MD_Farhad_Resume.pdf`.
-- Resume builder: `python3 scripts/build-resume.py` (requires ReportLab).
-- Fonts are hosted locally; their OFL licenses are included alongside them.
+- Fonts are hosted locally with their licenses.
 
-The current role is Software Engineer at Nexetic Oy, September 2026–present. Prime Tech ends December 2022, as confirmed by the owner.
+The current role remains Software Engineer at Nexetic Oy, September 2026–present. Prime Tech ends December 2022. This visual refinement does not edit profile content or the resume.
 
-## Behavior
+## Interaction
 
-The hero offers three sculptures, pointer interaction, and a pause control. Reduced motion is honored, and animation stops when the hero is outside the viewport or the tab is hidden. Written content is prerendered and does not require WebGL. If rendering is unavailable, a static composition takes its place.
+Scroll or drag along the original route; use the zone map or arrow keys to select a stop. Map navigation eases through the route with smooth acceleration and deceleration, stable eye height and damped camera rotation. Holograms fade as visitors pass through them. The original binary rain reveal is faster and lighter; card transitions ease in and out.
 
-The project archive preserves all 16 projects with category filtering. Career details expand independently. The contact form uses the existing EmailJS configuration when available and otherwise prepares a draft in the visitor’s email app; it never reports an unsent draft as delivered.
+Experience, Projects and Blogs retain their in-world carousels, with direct previous/next buttons and an item counter. “Read panel” enlarges the current content in an accessible dialog without losing the visitor's place. The renderer pauses while the reader is open or the browser tab is hidden.
+
+Reduced motion follows the system preference and can be changed from the existing HUD. The forest includes loading and failure states with an always-available text route. Contact controls appear on arrival, and the form does not intercept editing keys. EmailJS remains optional; without configuration the form opens an email draft.
 
 ## Validation
 
@@ -35,10 +37,8 @@ npm test -- --watch=false
 npm run build
 ```
 
-Unit checks cover navigation, project filtering, reduced motion controls, fallback content, and form submission states. Build checks prerender `/`, `/experience`, and `/page`. Browser visual review remains necessary before release; automated browser access was blocked by an unavailable browser security check during this update.
-
-The whole-page component stylesheet has a 20 kB warning / 24 kB error budget; the production stylesheet is about 18 kB before transfer compression. The sculpture engine is loaded separately from the initial application.
+Tests cover the original stops, profile data, navigation, motion preference, carousel controls, text reader, wheel normalization, loading failure, lifecycle cleanup and form error handling. Production builds prerender three routes. Desktop and mobile browser checks supplement these tests; a physical touch-device performance review is still useful before release.
 
 ## Publishing
 
-The existing GitHub Pages workflow combines the `Redesign` branch with `main`. Apply the modern UI changes to `Redesign` and the companion profile/resume changes to `main` before deploying. The work is currently local and has not been published.
+The existing workflow combines the `Redesign` branch with `main`. These changes remain local on `codex/modern-3d`; nothing has been deployed.

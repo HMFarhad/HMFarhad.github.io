@@ -139,15 +139,20 @@ export class Forest {
     const barkUrl    = new URL('assets/forest/bark/bark_brown_02_diff_1k.jpg',   document.baseURI).toString();
     const barkNormal = new URL('assets/forest/bark/bark_brown_02_nor_gl_1k.jpg', document.baseURI).toString();
     const tl = new THREE.TextureLoader();
+    let disposed = false;
+    this.barkMat.addEventListener('dispose', () => { disposed = true; });
     tl.load(barkUrl, (t) => {
+      if (disposed) { t.dispose(); return; }
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.repeat.set(1, 4);
       t.colorSpace = THREE.SRGBColorSpace;
       t.anisotropy = 8;
+      this.barkMat.map?.dispose();
       this.barkMat.map = t;
       this.barkMat.needsUpdate = true;
     });
     tl.load(barkNormal, (t) => {
+      if (disposed) { t.dispose(); return; }
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.repeat.set(1, 4);
       this.barkMat.normalMap = t;
@@ -299,9 +304,9 @@ export class Forest {
       const variant = variants[v];
       const mat = new THREE.MeshStandardMaterial({
         map: leafTex,
-        alphaMap: leafTex,
         transparent: false,
         alphaTest: variant.alphaTest,
+        alphaToCoverage: true,
         side: THREE.DoubleSide,
         roughness: 0.85,
         metalness: 0,
@@ -431,8 +436,8 @@ export class Forest {
 
     const mat = new THREE.MeshStandardMaterial({
       map: tex,
-      alphaMap: tex,
       alphaTest: 0.45,
+      alphaToCoverage: true,
       side: THREE.DoubleSide,
       roughness: 0.9,
       metalness: 0,

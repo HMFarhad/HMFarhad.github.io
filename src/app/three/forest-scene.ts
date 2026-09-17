@@ -8,14 +8,16 @@ import { buildStationLandmarks, type StationLandmarksHandle } from './world/land
 import { ACTIVE_ZONES }        from '../core/content/zones';
 import { isMobileLayout }      from '../core/device';
 
-const SCROLL_EASE    = 1.6;
-const SNAP_THRESHOLD = 0.025;
+const SCROLL_EASE    = 5;
+const SNAP_THRESHOLD = 0.009;
 const SNAP_IDLE_MS   = 350;
 
 export class ForestScene {
   // public callbacks (wired by ExperienceComponent)
   onActiveZoneChange: ((idx: number) => void) | null = null;
   onLandmarkHover:    ((idx: number | null) => void) | null = null;
+  onStationSettled: ((settled: boolean) => void) | null = null;
+  onCarouselChange: ((state: { index: number; count: number } | null) => void) | null = null;
 
   private renderer!: THREE.WebGLRenderer;
   private scene!: THREE.Scene;
@@ -35,9 +37,17 @@ export class ForestScene {
   private currentProgress = 0;
   private lastScrollAt    = 0;
   private activeIndex     = -1;
+  private travel: { from: number; to: number; elapsed: number; duration: number } | null = null;
+  private motion = true;
+  private settled = false;
+  private lastHover: number | null = null;
+  private lastCarousel = '';
+  private viewMatrix = new THREE.Matrix4();
+  private viewQuaternion = new THREE.Quaternion();
+  private disposeEnvironment: (() => void) | null = null;
 
   // pointer + raycaster
-  private pointer = new THREE.Vector2();
+  private pointer = new THREE.Vector2(10, 10);
   private raycaster = new THREE.Raycaster();
 
   private rafId = 0;
@@ -45,6 +55,7 @@ export class ForestScene {
   private resizeHandler: () => void;
   private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
+  private paused = false;
   private mobile = false;
 
   constructor(private canvas: HTMLCanvasElement, stationCount: number) {
@@ -60,7 +71,10 @@ export class ForestScene {
     this.scene.background = new THREE.Color(0x6a7468);
     this.renderer.setClearColor(0x6a7468, 1);
 
-    void applyEnvironment(this.scene, this.renderer);
+    void applyEnvironment(this.scene, this.renderer, () => this.disposed).then((dispose) => {
+      if (this.disposed) dispose?.();
+      else this.disposeEnvironment = dispose;
+    });
     buildLighting(this.scene);
 
     this.landmarks = buildStationLandmarks(ACTIVE_ZONES, this.stationProgress, this.curve);
@@ -80,6 +94,7 @@ export class ForestScene {
 
     this.resizeHandler = () => this.onResize();
     window.addEventListener('resize', this.resizeHandler);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     window.visualViewport?.addEventListener('resize', this.resizeHandler);
     this.resizeObserver = new ResizeObserver(this.resizeHandler);
     this.resizeObserver.observe(this.canvas);
@@ -90,6 +105,7 @@ export class ForestScene {
 
   // ---------------- public API ----------------
   addScrollDelta(d: number): void {
+    this.travel = null;
     // If the user is parked at a zone whose panel owns a carousel
     // (currently just the Experience zone), feed the scroll into the
     // carousel first. Only the leftover delta — once the carousel has
@@ -97,7 +113,7 @@ export class ForestScene {
     if (
       this.activeIndex >= 0 &&
       this.landmarks &&
-      Math.abs(this.currentProgress - this.stationProgress[this.activeIndex]) < 0.04
+      Math.abs(this.currentProgress - this.stationProgress[this.activeIndex]) < 0.006
     ) {
       d = this.landmarks.nudgeCarousel(this.activeIndex, d);
       if (d === 0) {
@@ -106,6 +122,7 @@ export class ForestScene {
       }
     }
     this.targetProgress = THREE.MathUtils.clamp(this.targetProgress + d, 0, 1);
+    if (!this.motion) this.currentProgress = this.targetProgress;
     this.lastScrollAt = performance.now();
   }
   setPointer(x: number, y: number): void {
@@ -113,7 +130,7 @@ export class ForestScene {
   }
   pickStation(): number | null {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
+    const hits = this.panelHits();
     if (!hits.length) return null;
     const idx = hits[0].object.userData['stationIndex'];
     return typeof idx === 'number' ? idx : null;
@@ -125,7 +142,7 @@ export class ForestScene {
    */
   pickLink(): string | null {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
+    const hits = this.panelHits();
     for (const h of hits) {
       if (!h.object.userData['isPanel']) continue;
       const idx = h.object.userData['stationIndex'];
@@ -137,26 +154,73 @@ export class ForestScene {
   }
   jumpToStation(idx: number): void {
     if (idx < 0 || idx >= this.stationProgress.length) return;
+    this.settled = false;
+    this.lastCarousel = '';
+    this.onStationSettled?.(false);
     this.targetProgress = this.stationProgress[idx];
+    if (this.motion) {
+      this.travel = {
+        from: this.currentProgress, to: this.targetProgress, elapsed: 0,
+        duration: 1.2 + Math.abs(this.targetProgress - this.currentProgress) * 3.8,
+      };
+    } else {
+      this.currentProgress = this.targetProgress;
+      this.travel = null;
+    }
     this.lastScrollAt = performance.now();
+  }
+
+  private panelHits(): THREE.Intersection[] {
+    return this.raycaster.intersectObject(this.landmarks.group, true).filter((hit) => {
+      const mesh = hit.object as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      return mesh.visible && mesh.userData['isPanel'] && mesh.material.opacity > 0.2;
+    });
+  }
+
+  setMotion(enabled: boolean): void {
+    this.motion = enabled;
+    if (!enabled) {
+      this.currentProgress = this.targetProgress;
+      this.travel = null;
+    }
+  }
+
+  stepCarousel(direction: number): void {
+    if (this.settled) this.landmarks.stepCarousel(this.activeIndex, direction);
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.onVisibilityChange();
   }
 
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.rafId);
     window.removeEventListener('resize', this.resizeHandler);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     window.visualViewport?.removeEventListener('resize', this.resizeHandler);
     this.resizeObserver?.disconnect();
-    this.forest?.dispose();
+    this.disposeEnvironment?.();
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>();
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
-      if ((m as any).geometry?.dispose) m.geometry.dispose();
-      if ((m as any).material) {
+      if (m.geometry) geometries.add(m.geometry);
+      if (m.material) {
         const mat = m.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-        else mat.dispose();
+        for (const material of Array.isArray(mat) ? mat : [mat]) {
+          materials.add(material);
+          Object.values(material).forEach((value) => {
+            if (value instanceof THREE.Texture) textures.add(value);
+          });
+        }
       }
     });
+    textures.forEach((t) => t.dispose());
+    materials.forEach((m) => m.dispose());
+    geometries.forEach((g) => g.dispose());
     this.renderer.dispose();
   }
 
@@ -176,7 +240,7 @@ export class ForestScene {
   }
   private initScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x6a7468, 25, 180);
+    this.scene.fog = new THREE.Fog(0x7a8973, 18, 120);
   }
   private initCamera(): void {
     const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
@@ -234,7 +298,7 @@ export class ForestScene {
   }
 
   // ---------------- camera ----------------
-  private placeCameraAtProgress(p: number): void {
+  private placeCameraAtProgress(p: number, dt = 1): void {
     const pos = this.curve.getPointAt(p);
 
     // Pick a forward look-target. Near the end of the trail (p ≈ 1) the
@@ -250,10 +314,13 @@ export class ForestScene {
       lookAt = pos.clone().add(tan.multiplyScalar(2));
     }
 
-    pos.y    += 1.65;
-    lookAt.y += 1.5;
+    // The ground is level: keep eye height stable through the original route.
+    pos.y = 1.65;
+    lookAt.y = 1.5;
     this.camera.position.copy(pos);
-    this.camera.lookAt(lookAt);
+    this.viewMatrix.lookAt(pos, lookAt, this.camera.up);
+    this.viewQuaternion.setFromRotationMatrix(this.viewMatrix);
+    this.camera.quaternion.slerp(this.viewQuaternion, this.motion ? 1 - Math.exp(-12 * dt) : 1);
   }
 
   // ---------------- tick ----------------
@@ -264,13 +331,21 @@ export class ForestScene {
     this.lastFrame = now;
 
     // ease progress
-    this.currentProgress += (this.targetProgress - this.currentProgress) * (1 - Math.exp(-SCROLL_EASE * dt));
+    if (this.travel) {
+      this.travel.elapsed += dt;
+      const t = Math.min(1, this.travel.elapsed / this.travel.duration);
+      const ease = t * t * t * (t * (6 * t - 15) + 10);
+      this.currentProgress = THREE.MathUtils.lerp(this.travel.from, this.travel.to, ease);
+      if (t === 1) this.travel = null;
+    } else {
+      this.currentProgress += (this.targetProgress - this.currentProgress) * (1 - Math.exp(-SCROLL_EASE * dt));
+    }
 
     // snap when idle — but only once we're already close to our intended
     // target. Otherwise a long jump (e.g. mini-map click) gets short-circuited
     // and snaps to whichever station the ease happens to be passing.
     if (
-      now - this.lastScrollAt > SNAP_IDLE_MS &&
+      !this.travel && now - this.lastScrollAt > SNAP_IDLE_MS &&
       Math.abs(this.currentProgress - this.targetProgress) < SNAP_THRESHOLD
     ) {
       let nearest = this.stationProgress[0];
@@ -282,7 +357,7 @@ export class ForestScene {
       if (bestD < SNAP_THRESHOLD) this.targetProgress = nearest;
     }
 
-    this.placeCameraAtProgress(this.currentProgress);
+    this.placeCameraAtProgress(this.currentProgress, dt);
 
     // active zone
     let nearestIdx = 0;
@@ -296,18 +371,43 @@ export class ForestScene {
       this.onActiveZoneChange?.(nearestIdx);
     }
 
-    this.forest.update(dt);
-    this.godRays.update(dt);
-    this.landmarks.update(dt, this.activeIndex);
+    const settled = !this.travel && bestAD < 0.003 && Math.abs(this.targetProgress - this.currentProgress) < 0.001;
+    if (settled !== this.settled) {
+      this.settled = settled;
+      this.onStationSettled?.(settled);
+    }
+    if (this.motion) {
+      this.forest.update(dt);
+      this.godRays.update(dt);
+    }
+    this.landmarks.update(dt, this.activeIndex, this.currentProgress, this.motion);
+    const carousel = settled ? this.landmarks.carouselState(this.activeIndex) : null;
+    const key = carousel ? `${this.activeIndex}:${carousel.index}:${carousel.count}` : '';
+    if (key !== this.lastCarousel) {
+      this.lastCarousel = key;
+      this.onCarouselChange?.(carousel);
+    }
 
     // hover detect
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.landmarks.group, true);
+    const hits = this.panelHits();
     const hoverIdx = hits.length ? (hits[0].object.userData['stationIndex'] ?? null) : null;
-    this.onLandmarkHover?.(typeof hoverIdx === 'number' ? hoverIdx : null);
+    const hover = typeof hoverIdx === 'number' ? hoverIdx : null;
+    if (hover !== this.lastHover) {
+      this.lastHover = hover;
+      this.onLandmarkHover?.(hover);
+    }
 
     this.renderer.render(this.scene, this.camera);
     this.rafId = requestAnimationFrame(this.tick);
+  };
+
+  private onVisibilityChange = (): void => {
+    cancelAnimationFrame(this.rafId);
+    if (!document.hidden && !this.disposed && !this.paused) {
+      this.lastFrame = performance.now();
+      this.rafId = requestAnimationFrame(this.tick);
+    }
   };
 
   private onResize(): void {

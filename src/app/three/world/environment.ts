@@ -10,24 +10,31 @@ import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
  */
 export async function applyEnvironment(
   scene: THREE.Scene,
-  renderer: THREE.WebGLRenderer
-): Promise<void> {
+  renderer: THREE.WebGLRenderer,
+  isDisposed: () => boolean = () => false,
+): Promise<(() => void) | null> {
   try {
     const url = new URL('assets/forest/env/forest_slope_1k.hdr', document.baseURI).toString();
     const tex = await new HDRLoader().loadAsync(url);
+    if (isDisposed()) { tex.dispose(); return null; }
     tex.mapping = THREE.EquirectangularReflectionMapping;
     // Do NOT set tex.colorSpace — leave the loader default. Forcing it
     // produces near-black output under ACES tone mapping.
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
-    const envMap = pmrem.fromEquirectangular(tex).texture;
+    const environment = pmrem.fromEquirectangular(tex);
 
     scene.background  = tex;
-    scene.environment = envMap;
+    scene.environment = environment.texture;
+    scene.backgroundIntensity = 0.85;
+    scene.environmentIntensity = 0.8;
+    scene.backgroundBlurriness = 0.04;
     pmrem.dispose();
+    return () => { tex.dispose(); environment.dispose(); };
   } catch (err) {
     console.warn('[environment] HDRI failed, using fallback colour', err);
-    scene.background = new THREE.Color(0x4a5a55);
+    if (!isDisposed()) scene.background = new THREE.Color(0x6a7468);
+    return null;
   }
 }

@@ -43,7 +43,9 @@ type PanelContent =
 export interface StationLandmarksHandle {
   group: THREE.Group;
   /** Drive per-station rain. Call once per frame. */
-  update(dt: number, activeIdx: number): void;
+  update(dt: number, activeIdx: number, progress: number, motion: boolean): void;
+  carouselState(zoneIdx: number): { index: number; count: number } | null;
+  stepCarousel(zoneIdx: number, direction: number): void;
   /**
    * For the Experience zone: consume scroll input into the carousel that
    * swipes between job cards. Returns the unconsumed delta (>0 if the
@@ -116,7 +118,22 @@ export function buildStationLandmarks(
         child.scale.setScalar(scale);
       }
     },
-    update(dt: number, activeIdx: number): void {
+    update(dt: number, activeIdx: number, progress: number, motion: boolean): void {
+      // Fade the projection as the walker passes through its position.
+      // Keep the original ground projectors visible as route landmarks.
+      root.children.forEach((station, i) => {
+        const offset = progress - stationProgress[i];
+        const distance = Math.abs(offset);
+        const opacity = offset > 0
+          ? 1 - THREE.MathUtils.smoothstep(distance, 0.001, 0.009)
+          : 1 - THREE.MathUtils.smoothstep(distance, 0.003, 0.045);
+        station.children.forEach((child) => {
+          if (child.userData['projectionOpacity'] == null) return;
+          (child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity =
+            child.userData['projectionOpacity'] * opacity;
+          child.visible = opacity > 0.005;
+        });
+      });
       // When the active station changes, push the OLD active panel into
       // the dissolving phase (if it had any text built up).
       if (activeIdx !== lastActive) {
@@ -157,8 +174,33 @@ export function buildStationLandmarks(
         const isActive = i === activeIdx;
         const sliding = s.contentCanvases && (s.slideT! < 1 || s.subIndex !== s.subTarget);
         if (s.phase !== 'building' && s.phase !== 'dissolving' && !sliding) continue;
+        if (!motion) {
+          s.phase = isActive ? 'built' : 'empty';
+          s.revealMask.fill(isActive ? 1 : 0);
+          s.drops.length = 0;
+          if (s.contentCanvases) {
+            s.subIndex = s.subTarget;
+            s.slideT = 1;
+          }
+          redrawStationPanel(s, isActive);
+          continue;
+        }
         tickStationPanel(s, dt, isActive);
       }
+    },
+    carouselState(zoneIdx: number) {
+      const s = states[zoneIdx];
+      return s?.contentCanvases ? { index: s.subTarget ?? 0, count: s.contentCanvases.length } : null;
+    },
+    stepCarousel(zoneIdx: number, direction: number) {
+      const s = states[zoneIdx];
+      if (!s?.contentCanvases || s.slideT! < 1) return;
+      const target = THREE.MathUtils.clamp(s.subTarget! + direction, 0, s.contentCanvases.length - 1);
+      if (target === s.subTarget) return;
+      s.subTarget = target;
+      s.slideDir = direction > 0 ? 1 : -1;
+      s.slideT = 0;
+      s.swipeAccum = 0;
     },
     nudgeCarousel(zoneIdx: number, delta: number): number {
       const s = states[zoneIdx];
@@ -172,7 +214,7 @@ export function buildStationLandmarks(
     },
     pickLink(zoneIdx: number, u: number, v: number): string | null {
       const s = states[zoneIdx];
-      if (!s || !s.links) return null;
+      if (!s || !s.links || s.phase !== 'built') return null;
       // Don't activate links mid-swipe — the target card hasn't settled.
       if (s.contentCanvases && s.subIndex !== s.subTarget) return null;
       const idx = s.contentCanvases ? (s.subIndex ?? 0) : 0;
@@ -197,7 +239,7 @@ export function holoScreenScaleForViewport(w: number, h: number): number {
 
   // Portrait — the panel is much wider than the view frustum.
   if (aspect < 0.85) {
-    return THREE.MathUtils.clamp(0.36 + aspect * 0.44, 0.48, 0.76);
+    return THREE.MathUtils.clamp(aspect * 1.05, 0.32, 0.76);
   }
   // Phone landscape or small-height windows.
   if (shortSide < 520) {
@@ -255,6 +297,7 @@ function makeHoloScreen(
     })
   );
   beam.position.set(0, (screenY - 0.05) / 2 + 0.02, 0);
+  beam.userData['projectionOpacity'] = 0.25;
   // Make the beam billboard-like by leaving it on the screen plane —
   // it's mostly visible from the front anyway.
   g.add(beam);
@@ -274,10 +317,12 @@ function makeHoloScreen(
       depthWrite: false,
       side: THREE.DoubleSide,
       opacity: 1.0,
+      toneMapped: false,
     })
   );
   screen.position.set(0, screenY, 0);
   screen.userData['isPanel'] = true;
+  screen.userData['projectionOpacity'] = 1;
   g.add(screen);
 
   // ---- back glow halo: soft radial behind for bloom (no text ghost) ----
@@ -295,6 +340,7 @@ function makeHoloScreen(
     })
   );
   glow.position.set(0, screenY, 0.05);
+  glow.userData['projectionOpacity'] = 0.25;
   g.add(glow);
 
   return g;
@@ -395,15 +441,15 @@ const CELL_H = 36;
 
 // Build/dissolve sweep speeds (px/sec). Each column gets a random speed
 // in this range so the wavefront looks irregular and "rain-like".
-const BUILD_SPEED_MIN     = 480;
-const BUILD_SPEED_MAX     = 820;
-const DISSOLVE_SPEED_MIN  = 560;
-const DISSOLVE_SPEED_MAX  = 940;
+const BUILD_SPEED_MIN     = 1100;
+const BUILD_SPEED_MAX     = 1550;
+const DISSOLVE_SPEED_MIN  = 1500;
+const DISSOLVE_SPEED_MAX  = 1950;
 
 // Drop population while a station is mid-reveal. Once the panel reaches
 // the `built` or `empty` phase, the drop pool is emptied and the panel
 // stops repainting entirely — no continuous ambient rain, no lag.
-const DROPS_ACTIVE  = 90;
+const DROPS_ACTIVE  = 34;
 
 // Per-drop physics ranges.
 const DROP_VY_MIN   = 380;   // px / sec
@@ -806,7 +852,7 @@ function redrawStationPanel(s: StationRevealState, isActive: boolean): void {
   // only used for zone enter/exit, not for in-place item changes.
   if (s.contentCanvases && (s.slideT! < 1 || s.subIndex !== s.subTarget)) {
     const slideW = W - 32; // inner area inside the rounded outline
-    const t = s.slideT!;
+    const t = s.slideT! * s.slideT! * (3 - 2 * s.slideT!);
     const dir = s.slideDir! || 1;
     const dx = -dir * t * slideW;
     ctx.save();
@@ -903,9 +949,9 @@ function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): voi
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.clip();
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0,   'rgba(6, 18, 28, 0.82)');
-  bg.addColorStop(0.5, 'rgba(8, 22, 32, 0.80)');
-  bg.addColorStop(1,   'rgba(10, 26, 38, 0.78)');
+  bg.addColorStop(0,   'rgba(8, 23, 29, 0.95)');
+  bg.addColorStop(0.5, 'rgba(8, 22, 28, 0.93)');
+  bg.addColorStop(1,   'rgba(13, 30, 35, 0.90)');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
@@ -914,7 +960,7 @@ function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): voi
   ctx.save();
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.clip();
-  ctx.strokeStyle = 'rgba(140, 220, 255, 0.08)';
+  ctx.strokeStyle = 'rgba(140, 220, 255, 0.035)';
   ctx.lineWidth = 1;
   const cell = 64;
   for (let x = 16; x < W - 16; x += cell) {
@@ -926,13 +972,13 @@ function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): voi
   ctx.restore();
 
   // ---- outer rounded outline ----
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(180, 240, 255, 0.35)';
   drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
   ctx.stroke();
 
   // ---- corner brackets ----
-  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 42, 'rgba(200, 245, 255, 0.95)', 5);
+  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 32, 'rgba(170, 231, 240, 0.8)', 3);
 
   // ---- header underline ----
   ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
@@ -967,26 +1013,13 @@ function drawContentInto(
 ): void {
   ctx.clearRect(0, 0, W, H);
 
-  // Outline-and-fill text helper override (same as before).
-  const baseFillText = ctx.fillText.bind(ctx);
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  (ctx as any).fillText = (text: string, tx: number, ty: number, maxW?: number) => {
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(0, 8, 20, 0.85)';
-    if (maxW != null) ctx.strokeText(text, tx, ty, maxW);
-    else ctx.strokeText(text, tx, ty);
-    const prev = ctx.fillStyle;
-    ctx.fillStyle = 'rgba(240, 250, 255, 1.0)';
-    if (maxW != null) baseFillText(text, tx, ty, maxW);
-    else baseFillText(text, tx, ty);
-    ctx.fillStyle = prev;
-  };
+  // The glass supplies contrast, so retain each text style's intended colour.
 
   // Header title. Carousel sub-panels (Experience / Projects) get a
   // section-prefixed label so each screen is clearly part of the same
   // section.
   ctx.font = '800 40px ' + HOLO_FONT;
+  ctx.fillStyle = 'rgba(180, 225, 230, 0.9)';
   ctx.textBaseline = 'middle';
   let headerText: string;
   if (content.kind === 'experience-item') {
@@ -1041,12 +1074,12 @@ function drawContentInto(
       ctx.font = '700 80px ' + HOLO_FONT;
       ctx.fillText(zone.payload.name, bodyX, y); y += 92;
       ctx.fillStyle = accent;
-      wrap(zone.payload.tagline, 'italic 600 45px ' + HOLO_FONT, 52, W - bodyX - 80);
+      wrap(zone.payload.tagline, '500 42px ' + HOLO_FONT, 52, W - bodyX - 80);
       y += 30;
       ctx.fillStyle = muted;
       const paragraphs = zone.payload.bio.split(/\n\s*\n/);
       for (let i = 0; i < paragraphs.length; i++) {
-        wrap(paragraphs[i], '500 40px ' + HOLO_FONT, 46, W - bodyX - 80);
+        wrap(paragraphs[i], '400 40px ' + HOLO_FONT, 49, W - bodyX - 80);
         if (i < paragraphs.length - 1) y += 22;
       }
       break;

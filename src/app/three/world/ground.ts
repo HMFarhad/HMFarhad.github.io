@@ -11,12 +11,14 @@ export function buildGround(size = 400): THREE.Mesh {
   geom.setAttribute('uv2', geom.getAttribute('uv'));
 
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xb0a89a,
+    color: 0x9d9b77,
     roughness: 1,
     metalness: 0
   });
 
   const loader = new THREE.TextureLoader();
+  let disposed = false;
+  mat.addEventListener('dispose', () => { disposed = true; });
   const base   = 'assets/forest/ground/';
 
   const setupTex = (
@@ -26,8 +28,9 @@ export function buildGround(size = 400): THREE.Mesh {
   ) => {
     const url = new URL(base + file, document.baseURI).toString();
     loader.load(url, (t) => {
+      if (disposed) { t.dispose(); return; }
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(24, 24);
+      t.repeat.set(54, 54);
       t.anisotropy = 8;
       if (target === 'map') t.colorSpace = THREE.SRGBColorSpace;
       onReady(t);

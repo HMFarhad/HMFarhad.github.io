@@ -345,8 +345,7 @@ export const ZONES: Zone[] = [
       links: [
         { label: 'GitHub — HMFarhad', url: 'https://github.com/HMFarhad' },
         { label: 'LinkedIn — hmfarhad', url: 'https://www.linkedin.com/in/hmfarhad/' },
-        { label: 'Medium — @HMFarhad', url: 'https://medium.com/@HMFarhad' },
-        { label: 'Phone — +358 40 246 7814', url: 'tel:+358402467814' }
+        { label: 'Medium — @HMFarhad', url: 'https://medium.com/@HMFarhad' }
       ]
     }
   }

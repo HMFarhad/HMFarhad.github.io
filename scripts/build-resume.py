@@ -30,7 +30,7 @@ def footer(c,doc):
     c.drawRightString(551,26,str(doc.page))
 p('Hossain Mohammad Farhad','NameCustom')
 p('Software Engineer at Nexetic Oy · C# / .NET · Angular','RoleCustom')
-p('Helsinki, Finland  |  +358 40 246 7814  |  <link href="mailto:hssnmd.farhad@gmail.com">hssnmd.farhad@gmail.com</link><br/><link href="https://github.com/HMFarhad">GitHub</link>  /  <link href="https://www.linkedin.com/in/hmfarhad/">LinkedIn</link>  /  <link href="https://hmfarhad.github.io/">Portfolio</link>','MetaCustom')
+p('Helsinki, Finland  |  <link href="mailto:hssnmd.farhad@gmail.com">hssnmd.farhad@gmail.com</link><br/><link href="https://github.com/HMFarhad">GitHub</link>  /  <link href="https://www.linkedin.com/in/hmfarhad/">LinkedIn</link>  /  <link href="https://hmfarhad.github.io/">Portfolio</link>','MetaCustom')
 section('Professional summary')
 p('Software Engineer at Nexetic Oy since September 2026. Full stack developer experienced in C#, .NET Core, ASP.NET, Angular and MSSQL, delivering applications across SaaS, inventory management, e-commerce and fintech. Track record of reducing latency, improving transaction workflows and collaborating in multicultural teams.')
 section('Core skills')
