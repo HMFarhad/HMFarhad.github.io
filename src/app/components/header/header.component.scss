@@ -219,3 +219,116 @@
     }
   }
 }
+
+/* Modern navigation surface */
+.header {
+  background: rgba(9, 13, 24, 0.82);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: none;
+  backdrop-filter: blur(18px) saturate(140%);
+
+  &.scrolled {
+    background: rgba(9, 13, 24, 0.94);
+    box-shadow: 0 12px 36px rgba(2, 6, 18, 0.18);
+  }
+}
+
+.navbar {
+  max-width: 1440px;
+  min-height: 72px;
+  padding: 0.75rem clamp(1rem, 3vw, 3rem);
+}
+
+.nav-brand .brand-link .brand-text {
+  background: linear-gradient(110deg, #ffffff 10%, #9be8de 95%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.nav-menu {
+  align-items: center;
+  gap: 0.15rem;
+
+  .nav-item .nav-link {
+    color: rgba(255, 255, 255, 0.72);
+    border-radius: 9px;
+    font-size: 0.88rem;
+    padding: 0.55rem 0.7rem;
+
+    &:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+      transform: none;
+    }
+
+    &::after {
+      display: none;
+    }
+  }
+}
+
+.nav-item-3d .nav-3d-link {
+  margin-left: 0.45rem;
+  padding: 0.62rem 0.9rem;
+  border: 1px solid rgba(155, 232, 222, 0.42);
+  border-radius: 10px;
+  background: rgba(89, 214, 199, 0.12);
+  box-shadow: none;
+  font-size: 0.86rem;
+
+  &:hover {
+    background: rgba(89, 214, 199, 0.2);
+    box-shadow: 0 8px 24px rgba(48, 198, 181, 0.12);
+  }
+}
+
+.nav-toggle {
+  border: 0;
+  background: transparent;
+
+  .bar {
+    width: 24px;
+    height: 2px;
+    background: #ffffff;
+  }
+}
+
+@media screen and (max-width: 1120px) and (min-width: 769px) {
+  .nav-menu {
+    gap: 0;
+
+    .nav-item .nav-link,
+    .nav-item-3d .nav-3d-link {
+      padding-inline: 0.52rem;
+      font-size: 0.8rem;
+    }
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .nav-menu {
+    top: 72px;
+    height: calc(100dvh - 72px);
+    padding: 1.25rem;
+    background: rgba(9, 13, 24, 0.98);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 22px 40px rgba(2, 6, 18, 0.3);
+
+    .nav-item {
+      width: 100%;
+      margin: 0.2rem 0;
+
+      .nav-link,
+      .nav-3d-link {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        padding: 0.9rem 1rem;
+        color: rgba(255, 255, 255, 0.86);
+      }
+    }
+  }
+}

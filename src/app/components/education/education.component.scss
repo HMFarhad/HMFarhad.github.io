@@ -377,3 +377,137 @@
     }
   }
 }
+
+/* Dark editorial education section */
+.education {
+  padding: clamp(5rem, 9vw, 8rem) 0;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(98, 93, 245, 0.24), transparent 32%),
+    radial-gradient(circle at 82% 76%, rgba(89, 214, 199, 0.13), transparent 30%),
+    #0c111e;
+
+  &::before {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 58px 58px;
+    opacity: 0.72;
+  }
+}
+
+.education-container {
+  max-width: 1280px;
+  padding: 0 clamp(1rem, 3vw, 2.5rem);
+}
+
+.section-header {
+  margin-bottom: 3.5rem;
+
+  .section-title {
+    font-size: clamp(2.5rem, 5vw, 4.4rem);
+    font-weight: 750;
+    letter-spacing: -0.055em;
+    line-height: 1;
+  }
+
+  .section-subtitle {
+    color: rgba(225, 231, 241, 0.68);
+    font-size: 1rem;
+    font-weight: 450;
+  }
+}
+
+.education-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 4rem;
+}
+
+.education-card,
+.language-skills .language-item {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(14px);
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: rgba(155, 232, 222, 0.3);
+    box-shadow: 0 28px 65px rgba(0, 0, 0, 0.24);
+  }
+}
+
+.education-card {
+  padding: 2rem;
+
+  &::before {
+    height: 2px;
+    background: linear-gradient(90deg, #625df5, #59d6c7);
+  }
+
+  .card-header {
+    gap: 1rem;
+
+    .degree-icon {
+      width: 52px;
+      height: 52px;
+      border: 1px solid rgba(155, 232, 222, 0.2);
+      border-radius: 14px;
+      background: rgba(89, 214, 199, 0.1);
+      color: #9be8de;
+    }
+
+    .degree-info {
+      .degree-title {
+        letter-spacing: -0.025em;
+      }
+
+      .field {
+        color: #9be8de;
+      }
+
+      .year {
+        border-radius: 8px;
+      }
+    }
+  }
+}
+
+.language-skills {
+  .section-header .section-title {
+    font-size: clamp(2rem, 3vw, 2.8rem);
+  }
+
+  .language-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .language-item {
+    padding: 1.5rem;
+
+    .progress-bar {
+      height: 5px;
+
+      .progress-fill {
+        background: linear-gradient(90deg, #625df5, #59d6c7);
+      }
+    }
+  }
+}
+
+@media screen and (max-width: 760px) {
+  .education {
+    padding: 4.5rem 0;
+  }
+
+  .section-header {
+    text-align: left;
+  }
+
+  .education-grid,
+  .language-skills .language-grid {
+    grid-template-columns: 1fr;
+  }
+}

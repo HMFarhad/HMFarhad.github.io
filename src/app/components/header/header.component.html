@@ -36,10 +36,10 @@
       </li>
     </ul>
     
-    <div class="nav-toggle" (click)="toggleMenu()">
+    <button class="nav-toggle" type="button" [class.active]="isMenuOpen" (click)="toggleMenu()" aria-label="Toggle navigation" [attr.aria-expanded]="isMenuOpen">
       <span class="bar"></span>
       <span class="bar"></span>
       <span class="bar"></span>
-    </div>
+    </button>
   </nav>
 </header>

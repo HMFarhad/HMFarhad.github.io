@@ -380,3 +380,124 @@
     }
   }
 }
+
+/* Cleaner professional timeline */
+.experience {
+  padding: clamp(5rem, 9vw, 8rem) 0;
+  background: #f5f5f2;
+}
+
+.experience-container {
+  max-width: 1200px;
+  padding: 0 clamp(1rem, 3vw, 2.5rem);
+}
+
+.section-header {
+  margin-bottom: 4rem;
+
+  .section-title {
+    color: #111827;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    font-size: clamp(2.5rem, 5vw, 4.4rem);
+    font-weight: 750;
+    letter-spacing: -0.055em;
+    line-height: 1;
+  }
+
+  .section-subtitle {
+    color: #677184;
+    font-size: 1rem;
+    font-weight: 450;
+  }
+}
+
+.timeline::before {
+  width: 2px;
+  background: linear-gradient(#625df5, #59d6c7);
+}
+
+.timeline-item {
+  margin-bottom: 1rem;
+
+  &.left .timeline-content,
+  &.right .timeline-content {
+    border-radius: 16px;
+  }
+}
+
+.timeline-content {
+  border: 1px solid rgba(17, 24, 39, 0.09);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 38px rgba(20, 24, 40, 0.065);
+  backdrop-filter: blur(10px);
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: rgba(98, 93, 245, 0.22);
+    box-shadow: 0 22px 50px rgba(20, 24, 40, 0.11);
+  }
+
+  .left &::before {
+    border-left-color: rgba(255, 255, 255, 0.94);
+  }
+
+  .right &::before {
+    border-right-color: rgba(255, 255, 255, 0.94);
+  }
+}
+
+.timeline-header {
+  .position {
+    color: #171d2b;
+    letter-spacing: -0.025em;
+  }
+
+  .company {
+    color: #4b46d8;
+  }
+
+  .duration {
+    border: 1px solid rgba(98, 93, 245, 0.12);
+    border-radius: 8px;
+    background: #efefff;
+    color: #565f71;
+  }
+}
+
+.timeline-body {
+  .description,
+  .achievements li {
+    color: #626c7e;
+  }
+
+  .technologies .tech-tag {
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 8px;
+    background: #f0f1f5;
+    color: #4d5666;
+  }
+}
+
+.timeline-marker {
+  width: 44px;
+  height: 44px;
+  border: 5px solid #f5f5f2;
+  background: #625df5;
+  box-shadow: 0 8px 24px rgba(98, 93, 245, 0.26);
+}
+
+@media screen and (max-width: 768px) {
+  .experience {
+    padding: 4.5rem 0;
+  }
+
+  .section-header {
+    text-align: left;
+  }
+
+  .timeline-item.left .timeline-content::before,
+  .timeline-item.right .timeline-content::before {
+    border-right-color: rgba(255, 255, 255, 0.94);
+  }
+}

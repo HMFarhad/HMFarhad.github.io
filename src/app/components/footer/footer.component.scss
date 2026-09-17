@@ -270,3 +270,68 @@
     }
   }
 }
+
+/* Minimal closing surface */
+.footer {
+  padding: 4.5rem 0 2rem;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(98, 93, 245, 0.18), transparent 30%),
+    #080c16;
+
+  &::before {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #59d6c7, #625df5, transparent);
+  }
+}
+
+.footer-container {
+  max-width: 1280px;
+  padding: 0 clamp(1rem, 3vw, 2.5rem);
+}
+
+.footer-content {
+  gap: clamp(2.5rem, 6vw, 6rem);
+}
+
+.footer-brand {
+  .brand-name {
+    color: #ffffff;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    font-size: 1.65rem;
+    letter-spacing: -0.035em;
+  }
+
+  .brand-tagline {
+    color: #cbd3e2;
+  }
+
+  .brand-description {
+    color: #7f899c;
+  }
+}
+
+.footer-links .link-group {
+  h4 {
+    color: #ffffff;
+    font-size: 1rem;
+
+    &::after {
+      background: #59d6c7;
+    }
+  }
+
+  ul li a,
+  .social-links .social-link {
+    color: #9099aa;
+
+    &:hover {
+      color: #9be8de;
+      transform: translateX(3px);
+    }
+  }
+}
+
+.footer-bottom .footer-divider {
+  background: rgba(255, 255, 255, 0.09);
+}
