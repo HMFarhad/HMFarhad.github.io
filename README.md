@@ -9,7 +9,7 @@ npm ci
 npm start
 ```
 
-Both `/` and `/experience` open the forest. `/page` provides the text portfolio and works without WebGL. The deployment workflow also assembles the separate main site under `/legacy/`.
+During local development, both `/` and `/experience` open the forest, while `/page` provides its accessible text fallback. In production, the standard portfolio remains at `https://hmfarhad.github.io/` and the forest is available only at `https://hmfarhad.github.io/experience/`.
 
 ## Content and implementation
 
@@ -41,4 +41,4 @@ Tests cover the original stops, profile data, navigation, motion preference, car
 
 ## Publishing
 
-The existing workflow combines the `Redesign` branch with `main`. These changes remain local on `codex/modern-3d`; nothing has been deployed.
+The workflow publishes `main` at the root address and places the `Redesign` build under `/experience/`. These changes remain local on `codex/modern-3d`; nothing has been deployed.

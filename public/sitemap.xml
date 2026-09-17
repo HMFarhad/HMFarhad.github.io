@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://hmfarhad.github.io/</loc></url>
-  <url><loc>https://hmfarhad.github.io/experience</loc></url>
-  <url><loc>https://hmfarhad.github.io/page</loc></url>
-  <url><loc>https://hmfarhad.github.io/legacy/</loc></url>
+  <url><loc>https://hmfarhad.github.io/experience/</loc></url>
+  <url><loc>https://hmfarhad.github.io/experience/page</loc></url>
   <url><loc>https://hmfarhad.github.io/llms.txt</loc></url>
   <url><loc>https://hmfarhad.github.io/assets/documents/Hossain_MD_Farhad_Resume.pdf</loc></url>
 </urlset>

@@ -11,7 +11,7 @@
     <div class="hud-actions">
       <button type="button" class="motion-toggle" (click)="toggleMotion()" [attr.aria-pressed]="!motion()"
         [attr.aria-label]="motion() ? 'Reduce animation' : 'Enable animation'">{{ motion() ? 'Motion on' : 'Motion reduced' }}</button>
-      <a class="escape" href="page">Skip to text version <span aria-hidden="true">↗</span></a>
+      <a class="escape" href="/">Back to text version <span aria-hidden="true">↗</span></a>
     </div>
   </header>
 
@@ -19,7 +19,7 @@
     <div class="scene-status" role="status">
       @if (sceneFailed()) {
         <p>The forest couldn’t load on this device.</p>
-        <a href="page">Open the text version ↗</a>
+        <a href="/">Open the standard site ↗</a>
       } @else {
         <span class="loading-mark" aria-hidden="true"></span>
         <p>Entering the forest…</p>

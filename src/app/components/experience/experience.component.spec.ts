@@ -65,7 +65,7 @@ describe('Original forest visitor journeys', () => {
     const f = await mount();
     expect(f.componentInstance.zones).toBe(ACTIVE_ZONES);
     expect(f.nativeElement.querySelectorAll('.mini-map button').length).toBe(7);
-    expect(f.nativeElement.querySelector('.escape').getAttribute('href')).toBe('page');
+    expect(f.nativeElement.querySelector('.escape').getAttribute('href')).toBe('/');
     const role = ACTIVE_ZONES.find((z) => z.id === 'experience');
     expect(role?.payload.items[0].role).toBe('Software Engineer');
     expect(role?.payload.items[0].period).toBe('September 2026 – Present');
@@ -249,7 +249,7 @@ describe('Original forest visitor journeys', () => {
     load.mockRejectedValue(new Error('WebGL unavailable'));
     const f = await mount();
     expect(f.componentInstance.sceneFailed()).toBe(true);
-    expect(f.nativeElement.querySelector('.scene-status a').getAttribute('href')).toBe('page');
+    expect(f.nativeElement.querySelector('.scene-status a').getAttribute('href')).toBe('/');
   });
 
   it('does not create a scene after navigating away during loading', async () => {

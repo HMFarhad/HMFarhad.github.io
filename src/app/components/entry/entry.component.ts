@@ -21,6 +21,6 @@ export class EntryComponent implements OnInit {
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
-    window.location.replace('/legacy/');
+    window.location.replace('/');
   }
 }

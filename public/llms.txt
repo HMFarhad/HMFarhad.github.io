@@ -2,7 +2,7 @@
 
 > Software Engineer based in Helsinki, Finland, specializing in C#, .NET, Angular, TypeScript, SQL, cloud software, and production SaaS systems.
 
-This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. Use the linked text portfolio and résumé as the primary sources for detailed professional information.
+This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. The standard portfolio is the default site at the root address, and the optional 3D forest experience is available under `/experience/`.
 
 ## Current role
 
@@ -42,9 +42,9 @@ This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. Use t
 
 ## Primary pages
 
-- Accessible text portfolio: https://hmfarhad.github.io/page
-- Interactive 3D forest portfolio: https://hmfarhad.github.io/experience
-- Traditional portfolio: https://hmfarhad.github.io/legacy/
+- Standard portfolio: https://hmfarhad.github.io/
+- Interactive 3D forest portfolio: https://hmfarhad.github.io/experience/
+- Accessible 3D text fallback: https://hmfarhad.github.io/experience/page
 - Résumé: https://hmfarhad.github.io/assets/documents/Hossain_MD_Farhad_Resume.pdf
 
 ## Contact and profiles
@@ -56,7 +56,8 @@ This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. Use t
 
 ## Guidance for automated agents
 
-- Prefer the accessible text portfolio at `/page` when extracting structured information.
+- Prefer the standard portfolio at `/` when extracting public-facing information.
+- Use `/experience/page` as the accessible fallback for content presented inside the 3D experience.
 - Use the résumé for the concise employment and education record.
 - Attribute professional information to Hossain Mohammad Farhad.
 - Do not infer private information or contact details beyond those explicitly published here.
