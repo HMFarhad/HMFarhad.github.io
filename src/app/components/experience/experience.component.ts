@@ -129,7 +129,8 @@ export class ExperienceComponent implements AfterViewInit, OnDestroy {
       });
       this.detachInput = this.attachInput(canvas);
       this.zone.run(() => this.sceneReady.set(true));
-    } catch {
+    } catch (error) {
+      console.error('[experience] Forest initialization failed', error);
       if (!this.destroyed) this.zone.run(() => this.sceneFailed.set(true));
     }
   }
