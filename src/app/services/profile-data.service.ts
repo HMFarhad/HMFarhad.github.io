@@ -88,7 +88,7 @@ export class ProfileDataService {
       },
       {
         company: 'AdvancePro Technologies',
-        position: 'Software Engineer (Freelance)',
+        position: 'Senior Software Engineer (Freelance)',
         duration: 'January 2023 – September 2025',
         startDate: '2023-01',
         endDate: '2025-09',
@@ -101,7 +101,7 @@ export class ProfileDataService {
       },
       {
         company: 'MobilityOne Sdn Bhd',
-        position: '.NET Programmer',
+        position: 'Senior .NET Programmer',
         duration: 'December 2022 – August 2024',
         startDate: '2022-12',
         endDate: '2024-08',
