@@ -1,7 +1,7 @@
 <div class="experience-root" [class.ready]="sceneReady()" [class.still]="!motion()"
   [class.tour-active]="tourState() === 'playing' || tourState() === 'paused'">
   <canvas #canvas class="three-canvas" tabindex="0" role="img"
-    aria-label="Interactive forest journey. Scroll, drag or use arrow keys to explore. The text version contains all portfolio content."></canvas>
+    aria-label="Interactive forest journey. Scroll, drag or use arrow keys to explore. The standard portfolio contains all portfolio content."></canvas>
 
   <header class="hud-top">
     <div class="active-zone" aria-live="polite">
@@ -11,7 +11,7 @@
     <div class="hud-actions">
       <button type="button" class="motion-toggle" (click)="toggleMotion()" [attr.aria-pressed]="!motion()"
         [attr.aria-label]="motion() ? 'Reduce animation' : 'Enable animation'">{{ motion() ? 'Motion on' : 'Motion reduced' }}</button>
-      <a class="escape" href="/">Back to text version <span aria-hidden="true">↗</span></a>
+      <a class="escape" href="/">Back to standard portfolio <span aria-hidden="true">↗</span></a>
     </div>
   </header>
 

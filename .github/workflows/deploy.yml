@@ -86,10 +86,14 @@ jobs:
       - name: Locate main output
         id: standard_out
         run: |
-          DIR=$(find standard/dist -maxdepth 3 -type d -name browser | head -n 1)
-          if [ -z "$DIR" ]; then
+          DIR=standard/dist/portfolio-website/browser
+          if [ ! -d "$DIR" ]; then
+            DIR=$(find standard/dist -maxdepth 3 -type d -name browser | head -n 1)
+          fi
+          if [ ! -d "$DIR" ]; then
             DIR=$(find standard/dist -maxdepth 3 -mindepth 2 -type d | head -n 1)
           fi
+          test -d "$DIR"
           echo "Main output: $DIR"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 

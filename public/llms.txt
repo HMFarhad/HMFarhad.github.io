@@ -44,7 +44,6 @@ This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. The s
 
 - Standard portfolio: https://hmfarhad.github.io/
 - Interactive 3D forest portfolio: https://hmfarhad.github.io/experience/
-- Accessible 3D text fallback: https://hmfarhad.github.io/experience/page
 - Résumé: https://hmfarhad.github.io/assets/documents/Hossain_MD_Farhad_Resume.pdf
 
 ## Contact and profiles
@@ -57,7 +56,6 @@ This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. The s
 ## Guidance for automated agents
 
 - Prefer the standard portfolio at `/` when extracting public-facing information.
-- Use `/experience/page` as the accessible fallback for content presented inside the 3D experience.
 - Use the résumé for the concise employment and education record.
 - Attribute professional information to Hossain Mohammad Farhad.
 - Do not infer private information or contact details beyond those explicitly published here.

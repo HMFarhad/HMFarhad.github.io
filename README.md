@@ -9,7 +9,7 @@ npm ci
 npm start
 ```
 
-During local development, both `/` and `/experience` open the forest, while `/page` provides its accessible text fallback. In production, the standard portfolio remains at `https://hmfarhad.github.io/` and the forest is available only at `https://hmfarhad.github.io/experience/`.
+During local development, both `/` and `/experience` open the forest. The former `/page` route redirects to the standard portfolio. In production, the complete blue portfolio remains at `https://hmfarhad.github.io/` and the forest is available only at `https://hmfarhad.github.io/experience/`.
 
 ## Content and implementation
 

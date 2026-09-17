@@ -15,7 +15,7 @@ export const routes: Routes = [
   {
     path: 'page',
     loadComponent: () =>
-      import('./components/page/page.component').then((m) => m.PageComponent)
+      import('./components/entry/entry.component').then((m) => m.EntryComponent)
   },
   { path: '**', redirectTo: '' }
 ];
