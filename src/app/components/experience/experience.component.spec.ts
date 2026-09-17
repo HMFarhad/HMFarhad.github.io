@@ -14,7 +14,7 @@ class FakeForest {
   setPointer = vi.fn();
   pickLink = vi.fn();
   pickStation = vi.fn();
-  stepCarousel = vi.fn();
+  stepCarousel = vi.fn(() => true);
   dispose = vi.fn();
   onActiveZoneChange: ((index: number) => void) | null = null;
   onStationSettled: ((settled: boolean) => void) | null = null;
@@ -82,6 +82,7 @@ describe('Original forest visitor journeys', () => {
     scene().onActiveZoneChange?.(3);
     f.detectChanges();
     expect(buttons[3].getAttribute('aria-current')).toBe('step');
+    expect(buttons[3].closest('li').classList.contains('visited')).toBe(true);
     expect(f.nativeElement.querySelector('.active-zone').textContent).toContain('Projects');
   });
 
@@ -89,8 +90,76 @@ describe('Original forest visitor journeys', () => {
     reducedMotion = true;
     const f = await mount();
     expect(scene().setMotion).toHaveBeenCalledWith(false);
-    f.nativeElement.querySelector('.motion-toggle').click();
+    const toggle = f.nativeElement.querySelector('.motion-toggle');
+    expect(toggle.getAttribute('aria-label')).toBe('Enable animation');
+    toggle.click();
+    f.detectChanges();
     expect(scene().setMotion).toHaveBeenLastCalledWith(true);
+    expect(toggle.getAttribute('aria-label')).toBe('Reduce animation');
+  });
+
+  it('plays the guided journey through each settled stop', async () => {
+    const f = await mount();
+    vi.useFakeTimers();
+    f.nativeElement.querySelector('.tour-launch button').click();
+    expect(f.componentInstance.tourState()).toBe('playing');
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(0);
+
+    scene().onStationSettled?.(true);
+    vi.advanceTimersByTime(3200);
+    expect(f.componentInstance.tourProgress()).toBeGreaterThan(0.45);
+    expect(f.componentInstance.tourProgress()).toBeLessThan(0.55);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.tour-wait-track').getAttribute('aria-valuenow')).toBe('49');
+    vi.advanceTimersByTime(3300);
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(1);
+
+    scene().onActiveZoneChange?.(6);
+    scene().onStationSettled?.(true);
+    vi.advanceTimersByTime(6500);
+    expect(f.componentInstance.tourState()).toBe('completed');
+    vi.useRealTimers();
+  });
+
+  it('shows every carousel page before the guided journey leaves the section', async () => {
+    const f = await mount();
+    vi.useFakeTimers();
+    f.nativeElement.querySelector('.tour-launch button').click();
+    scene().onActiveZoneChange?.(2);
+    scene().onCarouselChange?.({ index: 0, count: 4 });
+    scene().onStationSettled?.(true);
+
+    vi.advanceTimersByTime(6500);
+    expect(scene().stepCarousel).toHaveBeenLastCalledWith(1);
+    expect(scene().jumpToStation).not.toHaveBeenCalledWith(3);
+
+    scene().onCarouselChange?.({ index: 1, count: 4 });
+    vi.advanceTimersByTime(6500);
+    expect(scene().stepCarousel).toHaveBeenCalledTimes(2);
+
+    scene().onCarouselChange?.({ index: 3, count: 4 });
+    vi.advanceTimersByTime(6500);
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(3);
+    vi.useRealTimers();
+  });
+
+  it('pauses and exits the guided journey when the visitor takes control', async () => {
+    const f = await mount();
+    f.nativeElement.querySelector('.tour-launch button').click();
+    f.detectChanges();
+    f.nativeElement.querySelector('.tour-primary').click();
+    expect(f.componentInstance.tourState()).toBe('paused');
+    expect(scene().setPaused).toHaveBeenLastCalledWith(true);
+
+    f.detectChanges();
+    f.nativeElement.querySelector('.tour-primary').click();
+    expect(f.componentInstance.tourState()).toBe('playing');
+    expect(scene().setPaused).toHaveBeenLastCalledWith(false);
+
+    f.nativeElement.querySelector('canvas').dispatchEvent(
+      new WheelEvent('wheel', { deltaY: 20, cancelable: true }));
+    expect(f.componentInstance.tourState()).toBe('idle');
+    expect(scene().addScrollDelta).toHaveBeenCalled();
   });
 
   it('keeps contact controls hidden during travel and lets arrow keys edit the message', async () => {
@@ -115,11 +184,38 @@ describe('Original forest visitor journeys', () => {
   it('provides direct buttons for the in-world carousel', async () => {
     const f = await mount();
     scene().onCarouselChange?.({ index: 0, count: 16 });
+    scene().onStationSettled?.(true);
     f.detectChanges();
     const controls = f.nativeElement.querySelectorAll('.carousel-controls button');
     expect(controls[0].disabled).toBe(true);
     controls[1].click();
     expect(scene().stepCarousel).toHaveBeenCalledWith(1);
+
+    scene().stepCarousel.mockClear();
+    const canvas = f.nativeElement.querySelector('canvas');
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    expect(scene().stepCarousel).toHaveBeenCalledWith(1);
+    expect(scene().jumpToStation).not.toHaveBeenCalled();
+  });
+
+  it('paginates carousel content inside the paused reader', async () => {
+    const f = await mount();
+    scene().onActiveZoneChange?.(3);
+    scene().onCarouselChange?.({ index: 0, count: 16 });
+    scene().onStationSettled?.(true);
+    f.detectChanges();
+    const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
+    dialog.showModal = vi.fn(() => dialog.setAttribute('open', ''));
+    f.nativeElement.querySelector('.read-panel').click();
+    f.detectChanges();
+
+    const pages = f.nativeElement.querySelectorAll('.reader-pagination button');
+    expect(pages[0].disabled).toBe(true);
+    pages[1].click();
+    f.detectChanges();
+    expect(scene().stepCarousel).toHaveBeenCalledWith(1);
+    expect(f.nativeElement.querySelector('.reader-pagination span').textContent).toContain('2 / 16');
+    expect(scene().setPaused).toHaveBeenLastCalledWith(true);
   });
 
   it('normalizes wheel units while allowing browser zoom', async () => {

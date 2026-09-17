@@ -1,15 +1,16 @@
-<div class="experience-root" [class.ready]="sceneReady()" [class.still]="!motion()">
+<div class="experience-root" [class.ready]="sceneReady()" [class.still]="!motion()"
+  [class.tour-active]="tourState() === 'playing' || tourState() === 'paused'">
   <canvas #canvas class="three-canvas" tabindex="0" role="img"
     aria-label="Interactive forest journey. Scroll, drag or use arrow keys to explore. The text version contains all portfolio content."></canvas>
 
   <header class="hud-top">
     <div class="active-zone" aria-live="polite">
-      <small>now <span>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / 07</span></small>
+      <small>now <span>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / {{ zones.length.toString().padStart(2, '0') }}</span></small>
       <strong>{{ zoneTitle(activeIndex()) }}</strong>
     </div>
     <div class="hud-actions">
       <button type="button" class="motion-toggle" (click)="toggleMotion()" [attr.aria-pressed]="!motion()"
-        aria-label="Reduce animation">{{ motion() ? 'Motion on' : 'Motion reduced' }}</button>
+        [attr.aria-label]="motion() ? 'Reduce animation' : 'Enable animation'">{{ motion() ? 'Motion on' : 'Motion reduced' }}</button>
       <a class="escape" href="page">Skip to text version <span aria-hidden="true">↗</span></a>
     </div>
   </header>
@@ -31,6 +32,7 @@
       @for (z of zones; track z.id; let i = $index) {
         <li
           [class.active]="activeIndex() === i"
+          [class.visited]="visitedZones().has(i)"
           (mouseenter)="hoverIndex.set(i)"
           (mouseleave)="hoverIndex.set(null)"
         >
@@ -47,6 +49,57 @@
 
   @if (settled() && !isContactActive()) {
     <button type="button" class="read-panel" (click)="openReader()">Read panel <span aria-hidden="true">↗</span></button>
+  }
+
+  @if (sceneReady() && tourState() === 'idle' && activeIndex() === 0) {
+    <div class="tour-launch">
+      <button type="button" (click)="startTour()" aria-label="Start guided journey through all seven portfolio stops">
+        <span class="play-icon" aria-hidden="true">▶</span>
+        <span><strong>Start guided journey</strong><small>About 3 minutes · includes every panel</small></span>
+      </button>
+    </div>
+  }
+
+  @if (tourState() === 'playing' || tourState() === 'paused') {
+    <section class="tour-controls" aria-label="Guided journey controls">
+      <div class="tour-progress" aria-live="polite">
+        <small>{{ tourState() === 'paused' ? 'Journey paused' : 'Guided journey' }}</small>
+        <strong>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / {{ zones.length.toString().padStart(2, '0') }} · {{ zoneTitle(activeIndex()) }}</strong>
+        @if (carousel(); as guidedCard) {
+          <span class="tour-card-count">Panel {{ guidedCard.index + 1 }} / {{ guidedCard.count }}</span>
+        }
+        @if (settled()) {
+          <div class="tour-wait-row">
+            <div class="tour-wait-track" role="progressbar" aria-label="Reading time before the next stop"
+              aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="(tourProgress() * 100).toFixed(0)"
+              [attr.aria-valuetext]="tourState() === 'paused' ? 'Paused' : tourSecondsRemaining() + ' seconds until the next stop'">
+              <span [style.width.%]="tourProgress() * 100"></span>
+            </div>
+            <em>{{ tourState() === 'paused' ? 'paused' : 'next in ' + tourSecondsRemaining() + 's' }}</em>
+          </div>
+        } @else {
+          <div class="tour-travelling">Moving to stop…</div>
+        }
+      </div>
+      <div class="tour-actions">
+        <button type="button" (click)="stepTour(-1)" [disabled]="activeIndex() === 0" aria-label="Previous stop">←</button>
+        @if (tourState() === 'playing') {
+          <button type="button" class="tour-primary" (click)="pauseTour()" aria-label="Pause guided journey">Ⅱ</button>
+        } @else {
+          <button type="button" class="tour-primary" (click)="resumeTour()" aria-label="Resume guided journey">▶</button>
+        }
+        <button type="button" (click)="stepTour(1)" [disabled]="activeIndex() === zones.length - 1" aria-label="Next stop">→</button>
+        <button type="button" class="tour-exit" (click)="exitTour()">Exit</button>
+      </div>
+    </section>
+  }
+
+  @if (tourState() === 'completed') {
+    <section class="tour-complete" aria-live="polite">
+      <div><small>Journey complete</small><strong>You reached the final stop.</strong></div>
+      <button type="button" (click)="startTour()">Replay</button>
+      <button type="button" class="tour-exit" (click)="exitTour()">Explore freely</button>
+    </section>
   }
 
   <dialog #reader class="panel-reader" aria-labelledby="reader-title" (close)="resumeJourney()">
@@ -92,17 +145,24 @@
         <p>{{ blog.excerpt }}</p><a [href]="blog.url" target="_blank" rel="noopener noreferrer">Read article ↗</a>
       }
     }
+    @if (carousel(); as readerCard) {
+      <div class="reader-pagination" role="group" [attr.aria-label]="zoneTitle(activeIndex()) + ' pages'">
+        <button type="button" (click)="stepCard(-1)" [disabled]="readerCard.index === 0">← Previous</button>
+        <span aria-live="polite">{{ readerCard.index + 1 }} / {{ readerCard.count }}</span>
+        <button type="button" (click)="stepCard(1)" [disabled]="readerCard.index === readerCard.count - 1">Next →</button>
+      </div>
+    }
   </dialog>
 
   @if (carousel(); as card) {
     <div class="carousel-controls" role="group" aria-label="Panel navigation">
       <button type="button" (click)="stepCard(-1)" [disabled]="card.index === 0" aria-label="Previous card">←</button>
-      <span aria-live="polite">{{ card.index + 1 }} <span class="of">/ {{ card.count }}</span></span>
+      <span aria-live="polite"><b>{{ zoneTitle(activeIndex()) }}</b> · {{ card.index + 1 }} <span class="of">/ {{ card.count }}</span></span>
       <button type="button" (click)="stepCard(1)" [disabled]="card.index === card.count - 1" aria-label="Next card">→</button>
     </div>
   }
 
-  @if (showHint()) {
+  @if (showHint() && !(sceneReady() && tourState() === 'idle' && activeIndex() === 0)) {
     <div class="hint" aria-hidden="true">
       <span>{{ isMobile() ? 'Swipe to walk · tap panels · use zone map' : 'Scroll · drag · arrow keys to walk the path' }}</span>
     </div>

@@ -45,10 +45,10 @@ export interface StationLandmarksHandle {
   /** Drive per-station rain. Call once per frame. */
   update(dt: number, activeIdx: number, progress: number, motion: boolean): void;
   carouselState(zoneIdx: number): { index: number; count: number } | null;
-  stepCarousel(zoneIdx: number, direction: number): void;
+  stepCarousel(zoneIdx: number, direction: number): boolean;
   /**
-   * For the Experience zone: consume scroll input into the carousel that
-   * swipes between job cards. Returns the unconsumed delta (>0 if the
+   * For carousel zones: consume scroll input to swipe between cards.
+   * Returns the unconsumed delta (>0 if the
    * carousel is already at the last card and the walker should continue
    * along the trail, <0 mirror-image at the first card, 0 otherwise).
    * For any non-carousel zone this is a no-op and returns `delta` as-is.
@@ -73,8 +73,8 @@ export function buildStationLandmarks(
   curve: THREE.CatmullRomCurve3
 ): StationLandmarksHandle {
   const root = new THREE.Group();
-  // Each zone owns exactly one holo-screen state. The Experience zone
-  // uses its state's carousel fields to swipe between job cards in place.
+  // Each zone owns exactly one holo-screen state. Experience, Projects
+  // and Blogs use their state's carousel fields to swipe cards in place.
   const states: (StationRevealState | null)[] = [];
 
   const VIEW_DELTA = 0.012;
@@ -110,6 +110,7 @@ export function buildStationLandmarks(
   });
 
   let lastActive = -1;
+  let elapsed = 0;
   return {
     group: root,
     setViewport(w: number, h: number): void {
@@ -119,6 +120,7 @@ export function buildStationLandmarks(
       }
     },
     update(dt: number, activeIdx: number, progress: number, motion: boolean): void {
+      if (motion) elapsed += dt;
       // Fade the projection as the walker passes through its position.
       // Keep the original ground projectors visible as route landmarks.
       root.children.forEach((station, i) => {
@@ -127,10 +129,25 @@ export function buildStationLandmarks(
         const opacity = offset > 0
           ? 1 - THREE.MathUtils.smoothstep(distance, 0.001, 0.009)
           : 1 - THREE.MathUtils.smoothstep(distance, 0.003, 0.045);
+        const approach = 1 - THREE.MathUtils.smoothstep(distance, 0.006, 0.075);
+        const isActive = i === activeIdx;
         station.children.forEach((child) => {
+          if (child.userData['arrivalLight']) {
+            (child as THREE.PointLight).intensity = approach * (isActive ? 1.7 : 0.22);
+            return;
+          }
+          if (child.userData['arrivalRing'] != null) {
+            const ring = child as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+            const phase = motion ? (elapsed * 0.32 + child.userData['arrivalRing']) % 1 : 0.25;
+            ring.material.opacity = approach * (1 - phase) * (isActive ? 0.38 : 0.12);
+            ring.scale.setScalar(0.82 + phase * 1.05);
+            ring.visible = approach > 0.01;
+            return;
+          }
           if (child.userData['projectionOpacity'] == null) return;
+          const pulse = isActive && motion ? 1 + Math.sin(elapsed * 1.8) * 0.025 : 1;
           (child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity =
-            child.userData['projectionOpacity'] * opacity;
+            child.userData['projectionOpacity'] * opacity * pulse;
           child.visible = opacity > 0.005;
         });
       });
@@ -194,13 +211,14 @@ export function buildStationLandmarks(
     },
     stepCarousel(zoneIdx: number, direction: number) {
       const s = states[zoneIdx];
-      if (!s?.contentCanvases || s.slideT! < 1) return;
+      if (!s?.contentCanvases || s.slideT! < 1) return false;
       const target = THREE.MathUtils.clamp(s.subTarget! + direction, 0, s.contentCanvases.length - 1);
-      if (target === s.subTarget) return;
+      if (target === s.subTarget) return false;
       s.subTarget = target;
       s.slideDir = direction > 0 ? 1 : -1;
       s.slideT = 0;
       s.swipeAccum = 0;
+      return true;
     },
     nudgeCarousel(zoneIdx: number, delta: number): number {
       const s = states[zoneIdx];
@@ -281,6 +299,30 @@ function makeHoloScreen(
   proj.rotation.x = -Math.PI / 2;
   proj.position.y = 0.02;
   g.add(proj);
+
+  // Expanding floor ripples and a localized light make arrival feel like
+  // the existing projector is powering up rather than spawning new UI.
+  for (const phase of [0, 0.5]) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.82, 0.86, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0x9ee6ff,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0,
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.035;
+    ring.userData['arrivalRing'] = phase;
+    g.add(ring);
+  }
+
+  const arrivalLight = new THREE.PointLight(0x8ee8ff, 0, 9, 2);
+  arrivalLight.position.set(0, 1.8, 0.4);
+  arrivalLight.userData['arrivalLight'] = true;
+  g.add(arrivalLight);
 
   // ---- thin "beam" rising from the projector to the screen base ----
   // Simulated with a tall narrow additive plane (cheaper than a cone).
@@ -460,14 +502,14 @@ const DROP_TAIL_MIN = 4;
 const DROP_TAIL_MAX = 9;
 const DROP_SHUFFLE  = 0.07;  // sec, glyph reroll interval
 
-// ---------- carousel tunables (Experience zone) ----------
+// ---------- carousel tunables (Experience, Projects and Blogs) ----------
 /**
  * How much trail-progress one swipe consumes. The wheel handler in
  * ExperienceComponent divides deltaY by ~9000, so a single wheel notch
- * (~100) is ~0.011 progress units. With 0.045 per item the user needs
- * roughly four wheel notches to swipe between jobs.
+ * (~100) is ~0.011 progress units. With 0.018 per item, a deliberate
+ * wheel gesture or touch swipe advances exactly one card.
  */
-const CAROUSEL_SWIPE_PROGRESS = 0.045;
+const CAROUSEL_SWIPE_PROGRESS = 0.018;
 /** Slide-in animation duration, seconds. */
 const CAROUSEL_SLIDE_DURATION = 0.45;
 
@@ -510,7 +552,7 @@ interface StationRevealState {
   buildT: number;
   dissolveT: number;
 
-  // ---- carousel (only populated for the Experience zone) ----
+  // ---- carousel (populated for Experience, Projects and Blogs) ----
   /** One pre-rendered content canvas per experience item. */
   contentCanvases?: HTMLCanvasElement[];
   /** Index currently shown on the panel. */
@@ -778,7 +820,7 @@ function tickStationPanel(s: StationRevealState, dt: number, isActive: boolean):
     }
   }
 
-  // 3) Advance the carousel slide animation (Experience zone only).
+  // 3) Advance the carousel slide animation.
   if (s.contentCanvases && s.slideT! < 1) {
     s.slideT = Math.min(1, s.slideT! + dt / CAROUSEL_SLIDE_DURATION);
     if (s.slideT >= 1) {
@@ -800,6 +842,9 @@ function tickStationPanel(s: StationRevealState, dt: number, isActive: boolean):
  */
 function advanceCarousel(s: StationRevealState, delta: number): number {
   if (!s.contentCanvases) return delta;
+  // Consume input while a card is still sliding. Without this guard,
+  // repeated wheel events can update subTarget several times and skip cards.
+  if (s.slideT! < 1 || s.subIndex !== s.subTarget) return 0;
   const last = s.contentCanvases.length - 1;
   s.swipeAccum = (s.swipeAccum ?? 0) + delta;
 
@@ -994,7 +1039,7 @@ function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): voi
   ctx.font = '600 20px ' + HOLO_FONT;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'right';
-  ctx.fillText('SCROLL ↓ TO CONTINUE', W - 64, H - 60);
+  ctx.fillText('SCROLL / SWIPE TO EXPLORE', W - 64, H - 60);
   ctx.textAlign = 'left';
 }
 
