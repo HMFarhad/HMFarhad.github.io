@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Machine-readable portfolio overview for AI agents and crawlers:
+# https://hmfarhad.github.io/llms.txt
+Sitemap: https://hmfarhad.github.io/sitemap.xml
