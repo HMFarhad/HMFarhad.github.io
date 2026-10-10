@@ -12,7 +12,7 @@ export const ZONES: Zone[] = [
       // with `white-space: pre-line`; the 3D landmark in landmarks.ts splits
       // on the same blank-line marker to lay out one paragraph at a time.
       bio:
-        "If you're scanning for a rockstar developer, you can stop here. That's not me. I'm a regular engineer who shows up every day and moves forward in small, consistent steps. Progress, for me, is a straight line drawn slowly, not a spike on a chart.\n\n" +
+        "If you're scanning for a rockstar, you can skip me. I'm a regular engineer who shows up every day and moves forward in small, consistent steps. Progress, for me, is a straight line drawn slowly, not a spike on a chart.\n\n" +
         "When I face a new problem, my first attempt is rarely the clever shortcut. More often, it's the longer, more obvious path, the one that actually gets me to a working result. Only after that does the real work begin: going back, questioning every choice, and reshaping the solution until it's something I'd be comfortable defending. Optimization isn't an afterthought for me. It's the second half of the job.\n\n" +
         "I'm not a jack of all trades, and I don't pretend to be. But when a project needs it, I can deep dive into the specifics faster than I used to, thanks to AI as a learning tool. If the team needs someone to take on something unfamiliar, I'm happy to be that person and get up to speed quickly."
     }
@@ -164,6 +164,22 @@ export const ZONES: Zone[] = [
       // the same scroll-driven carousel as Experience (most-relevant
       // professional work first, then web/research/AI/hardware demos).
       items: [
+        {
+          category: 'Professional Work',
+          name: 'Nexetic — Microsoft 365 Backup & Recovery Platform',
+          blurb: 'Nexetic Oy is a Finnish SaaS company providing Microsoft 365 backup and recovery solutions. Contributing full-stack features across C#, .NET, Angular, EF Core, Azure Functions and SQL, including security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging and automated tests, alongside reporting and migration-verification tooling and OpenAPI/NSwag contract work.',
+          tech: ['C# / .NET', 'Angular / TypeScript', 'EF Core / SQL', 'Azure Functions', 'OpenAPI / NSwag'],
+          link: 'https://nexetic.com/',
+          linkLabel: 'Visit Site'
+        },
+        {
+          category: 'Professional Work',
+          name: 'Spice Döner — Restaurant Website',
+          blurb: 'A production website for Spice Döner, a kebab restaurant in Helsinki’s Forum shopping centre. Built with Angular 18 and server-side rendering for SEO, with a spreadsheet-driven menu editable via Google Sheets or an Excel workbook with no redeployment, direct ordering through Wolt and Uber Eats, bilingual English/Finnish content, GDPR-compliant consent management and PWA support, deployed on Cloudflare Pages.',
+          tech: ['Angular 18', 'Angular SSR', 'TypeScript', 'PWA', 'i18n (EN/FI)', 'Cloudflare Pages'],
+          link: 'https://spicedoner.fi/',
+          linkLabel: 'Visit Site'
+        },
         {
           category: 'Professional Work',
           name: 'AdvancePro — Inventory Management System',
