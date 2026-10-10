@@ -104,8 +104,7 @@ jobs:
           cp -r "${{ steps.standard_out.outputs.dir }}/." _site/
           mkdir -p _site/experience
           cp -r "${{ steps.redesign_out.outputs.dir }}/." _site/experience/
-          cp _site/index.html _site/404.html
-          cp _site/experience/index.html _site/experience/404.html
+          node standard/scripts/prepare-pages-seo.mjs _site
           touch _site/.nojekyll
           ls -la _site
           ls -la _site/experience
