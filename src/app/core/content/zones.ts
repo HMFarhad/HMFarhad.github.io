@@ -170,7 +170,8 @@ export const ZONES: Zone[] = [
           blurb: 'Nexetic Oy is a Finnish SaaS company providing Microsoft 365 backup and recovery solutions. Contributing full-stack features across C#, .NET, Angular, EF Core, Azure Functions and SQL, including security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation, audit logging and automated tests, alongside reporting and migration-verification tooling and OpenAPI/NSwag contract work.',
           tech: ['C# / .NET', 'Angular / TypeScript', 'EF Core / SQL', 'Azure Functions', 'OpenAPI / NSwag'],
           link: 'https://nexetic.com/',
-          linkLabel: 'Visit Site'
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/Nexetic.png'
         },
         {
           category: 'Professional Work',
@@ -178,7 +179,8 @@ export const ZONES: Zone[] = [
           blurb: 'A production website for Spice Döner, a kebab restaurant in Helsinki’s Forum shopping centre. Built with Angular 18 and server-side rendering for SEO, with a spreadsheet-driven menu editable via Google Sheets or an Excel workbook with no redeployment, direct ordering through Wolt and Uber Eats, bilingual English/Finnish content, GDPR-compliant consent management and PWA support, deployed on Cloudflare Pages.',
           tech: ['Angular 18', 'Angular SSR', 'TypeScript', 'PWA', 'i18n (EN/FI)', 'Cloudflare Pages'],
           link: 'https://spicedoner.fi/',
-          linkLabel: 'Visit Site'
+          linkLabel: 'Visit Site',
+          imageUrl: 'assets/images/projects/SpiceDoner.png'
         },
         {
           category: 'Professional Work',

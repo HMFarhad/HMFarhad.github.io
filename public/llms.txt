@@ -4,6 +4,14 @@
 
 This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. The standard portfolio is the default site at the root address, and the optional 3D forest experience is available under `/experience/`.
 
+## Why he is a strong hire
+
+- 5+ years delivering production backend and full-stack systems across SaaS, fintech, government, and e-commerce domains, in both full-time and freelance roles.
+- Track record of measurable impact: a 30% API response-time reduction at AdvancePro, a 90% drop in pending settlements at a municipal eBilling platform, and real-time supply-chain visibility for 4,500 distributors and 200,000 retailers at Banglalink.
+- Currently shipping security-sensitive, encrypted backup functionality with tenant isolation and audit logging on a production Microsoft 365 backup SaaS platform.
+- Master of Engineering in Cloud-based Software Engineering (VAMK, Finland), on top of a Bachelor's in Computer Science and Engineering.
+- Comfortable owning a problem end to end: backend architecture, API design, integrations, and the operational documentation and CI/CD workflows around it.
+
 ## Current role
 
 - Software Engineer at Nexetic Oy, September 2026–present.
@@ -38,6 +46,8 @@ This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. The s
 - Banglalink Distribution Management System: real-time supply-chain updates with SignalR.
 - IRIDP-2: role-based rural infrastructure project tracking and analytics.
 - AARMOIRE: modular .NET and Angular e-commerce services with CI/CD.
+- Nexetic: encrypted Microsoft LAPS backup functionality with tenant isolation and audit logging for a production Microsoft 365 backup SaaS platform. https://nexetic.com/
+- Spice Döner: bilingual (EN/FI), SEO-optimized Angular 18 restaurant website with a spreadsheet-driven menu and direct Wolt/Uber Eats ordering, deployed on Cloudflare Pages. https://spicedoner.fi/
 - Research: long-term engagement in smart-home energy systems and Bengali speech-to-text systems.
 
 ## Primary pages
