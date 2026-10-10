@@ -1,6 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ExperienceComponent, FOREST_LOADER } from './experience.component';
 import { EmailService } from '../../core/email.service';
+import { AMBIENCE } from '../../core/audio/ambience';
 import { ACTIVE_ZONES } from '../../core/content/zones';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
@@ -12,22 +13,32 @@ class FakeForest {
   setMotion = vi.fn();
   setPaused = vi.fn();
   setPointer = vi.fn();
-  pickLink = vi.fn();
   pickStation = vi.fn();
-  stepCarousel = vi.fn(() => true);
   dispose = vi.fn();
   onActiveZoneChange: ((index: number) => void) | null = null;
   onStationSettled: ((settled: boolean) => void) | null = null;
   onLandmarkHover: ((index: number | null) => void) | null = null;
-  onCarouselChange: ((state: { index: number; count: number } | null) => void) | null = null;
 }
+
+const indexOf = (id: string) => ACTIVE_ZONES.findIndex((z) => z.id === id);
+const itemCount = (id: string) => {
+  const zone = ACTIVE_ZONES.find((z) => z.id === id)!;
+  return 'items' in zone.payload ? zone.payload.items.length : 1;
+};
 
 describe('Original forest visitor journeys', () => {
   let fixture: ComponentFixture<ExperienceComponent> | undefined;
   let send: ReturnType<typeof vi.fn>;
   let load: ReturnType<typeof vi.fn>;
   let reducedMotion: boolean;
+  let mobileLayout: boolean;
+  let ambience: {
+    running: boolean;
+    start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>;
+    suspend: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>;
+  };
   const scene = () => FakeForest.instances.at(-1)!;
+  const el = () => fixture!.nativeElement as HTMLElement;
   const mount = async () => {
     fixture = TestBed.createComponent(ExperienceComponent);
     fixture.detectChanges();
@@ -35,21 +46,43 @@ describe('Original forest visitor journeys', () => {
     fixture.detectChanges();
     return fixture;
   };
+  /** Walk to a stop and arrive there. */
+  const arrive = (f: ComponentFixture<ExperienceComponent>, index: number) => {
+    scene().onActiveZoneChange?.(index);
+    scene().onStationSettled?.(true);
+    f.detectChanges();
+  };
+  const wheel = (deltaY: number) => el().querySelector('canvas')!.dispatchEvent(
+    new WheelEvent('wheel', { deltaY, cancelable: true }));
+  const key = (k: string, target: EventTarget = el().querySelector('canvas')!) => {
+    const event = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
 
   beforeEach(async () => {
     reducedMotion = false;
+    mobileLayout = false;
     FakeForest.instances = [];
+    localStorage.clear();
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
-      matches: query.includes('reduced-motion') && reducedMotion,
+      matches: (query.includes('reduced-motion') && reducedMotion)
+        || (query.includes('max-width: 768px') && mobileLayout),
       addEventListener: vi.fn(), removeEventListener: vi.fn(),
     })));
     send = vi.fn();
     load = vi.fn(async () => ({ ForestScene: FakeForest }));
+    ambience = {
+      running: false,
+      start: vi.fn(async () => undefined), stop: vi.fn(),
+      suspend: vi.fn(), resume: vi.fn(), dispose: vi.fn(),
+    };
     await TestBed.configureTestingModule({
       imports: [ExperienceComponent],
       providers: [
         { provide: EmailService, useValue: { isConfigured: true, send } },
         { provide: FOREST_LOADER, useValue: load },
+        { provide: AMBIENCE, useValue: ambience },
       ],
     }).compileComponents();
   });
@@ -57,8 +90,10 @@ describe('Original forest visitor journeys', () => {
   afterEach(() => {
     fixture?.destroy();
     fixture = undefined;
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('keeps all seven original stops and the profile data intact', async () => {
@@ -121,26 +156,27 @@ describe('Original forest visitor journeys', () => {
     vi.useRealTimers();
   });
 
-  it('shows every carousel page before the guided journey leaves the section', async () => {
+  it('shows every card page before the guided journey leaves the stop', async () => {
     const f = await mount();
+    const stop = indexOf('experience');
+    const count = itemCount('experience');
     vi.useFakeTimers();
     f.nativeElement.querySelector('.tour-launch button').click();
-    scene().onActiveZoneChange?.(2);
-    scene().onCarouselChange?.({ index: 0, count: 4 });
-    scene().onStationSettled?.(true);
+    arrive(f, stop);
+    expect(f.componentInstance.pageIndex()).toBe(0);
+    expect(f.nativeElement.querySelector('.tour-card-count').textContent).toContain(`1 / ${count}`);
+
+    for (let page = 1; page < count; page++) {
+      vi.advanceTimersByTime(6500);
+      expect(f.componentInstance.pageIndex()).toBe(page);
+      expect(scene().jumpToStation).not.toHaveBeenCalledWith(stop + 1);
+    }
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.tour-card-count').textContent).toContain(`${count} / ${count}`);
+    expect(document.activeElement?.id).not.toBe('card-title');
 
     vi.advanceTimersByTime(6500);
-    expect(scene().stepCarousel).toHaveBeenLastCalledWith(1);
-    expect(scene().jumpToStation).not.toHaveBeenCalledWith(3);
-
-    scene().onCarouselChange?.({ index: 1, count: 4 });
-    vi.advanceTimersByTime(6500);
-    expect(scene().stepCarousel).toHaveBeenCalledTimes(2);
-
-    scene().onCarouselChange?.({ index: 3, count: 4 });
-    vi.advanceTimersByTime(6500);
-    expect(scene().jumpToStation).toHaveBeenLastCalledWith(3);
-    vi.useRealTimers();
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(stop + 1);
   });
 
   it('pauses and exits the guided journey when the visitor takes control', async () => {
@@ -181,41 +217,176 @@ describe('Original forest visitor journeys', () => {
     expect(scene().jumpToStation).toHaveBeenCalledWith(0);
   });
 
-  it('provides direct buttons for the in-world carousel', async () => {
+  it('opens the station card only once the walker has arrived', async () => {
     const f = await mount();
-    scene().onCarouselChange?.({ index: 0, count: 16 });
+    expect(el().querySelector('app-station-card')).toBeNull();
     scene().onStationSettled?.(true);
     f.detectChanges();
-    const controls = f.nativeElement.querySelectorAll('.carousel-controls button');
-    expect(controls[0].disabled).toBe(true);
-    controls[1].click();
-    expect(scene().stepCarousel).toHaveBeenCalledWith(1);
+    expect(el().querySelector('app-station-card [role="region"]')).not.toBeNull();
+    scene().onStationSettled?.(false);
+    f.detectChanges();
+    expect(el().querySelector('app-station-card')).toBeNull();
+  });
 
-    scene().stepCarousel.mockClear();
-    const canvas = f.nativeElement.querySelector('canvas');
-    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
-    expect(scene().stepCarousel).toHaveBeenCalledWith(1);
+  it('shows the active stop content in the card without pausing the forest', async () => {
+    const f = await mount();
+    arrive(f, 0);
+    const card = el().querySelector('app-station-card')!;
+    const about = ACTIVE_ZONES.find((zone) => zone.id === 'about')!;
+    if (about.id !== 'about') throw new Error('unexpected zone');
+    expect(card.querySelector('#card-title')!.textContent).toContain('About');
+    expect(card.textContent).toContain(about.payload.name);
+    expect(card.textContent).toContain(about.payload.bio.split('\n\n')[0]);
+    expect(el().querySelector('dialog')).toBeNull();
+    expect(scene().setPaused).not.toHaveBeenCalledWith(true);
+  });
+
+  it('pages multi-item stops from the card and the arrow keys', async () => {
+    const f = await mount();
+    arrive(f, indexOf('projects'));
+    const prev = el().querySelector<HTMLButtonElement>('.card-prev')!;
+    expect(prev.disabled).toBe(true);
+    el().querySelector<HTMLButtonElement>('.card-next')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.pageIndex()).toBe(1);
+    expect(el().querySelector('.card-pagination .counter')!.textContent).toContain(`2 / ${itemCount('projects')}`);
+
+    key('ArrowRight');
+    expect(f.componentInstance.pageIndex()).toBe(2);
+    key('ArrowLeft');
+    expect(f.componentInstance.pageIndex()).toBe(1);
     expect(scene().jumpToStation).not.toHaveBeenCalled();
   });
 
-  it('paginates carousel content inside the paused reader', async () => {
+  it('turns card pages with the wheel before walking on, in both directions', async () => {
     const f = await mount();
-    scene().onActiveZoneChange?.(3);
-    scene().onCarouselChange?.({ index: 0, count: 16 });
-    scene().onStationSettled?.(true);
-    f.detectChanges();
-    const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
-    dialog.showModal = vi.fn(() => dialog.setAttribute('open', ''));
-    f.nativeElement.querySelector('.read-panel').click();
-    f.detectChanges();
+    const count = itemCount('experience');
+    vi.useFakeTimers();
+    arrive(f, indexOf('experience'));
+    const notch = 180; // 0.02 trail progress, just over one page
 
-    const pages = f.nativeElement.querySelectorAll('.reader-pagination button');
-    expect(pages[0].disabled).toBe(true);
-    pages[1].click();
+    wheel(notch);
+    expect(f.componentInstance.pageIndex()).toBe(1);
+    wheel(notch); // inside the post-flip lock: ignored
+    expect(f.componentInstance.pageIndex()).toBe(1);
+    for (let page = 2; page < count; page++) {
+      vi.advanceTimersByTime(400);
+      wheel(notch);
+      expect(f.componentInstance.pageIndex()).toBe(page);
+    }
+    expect(scene().addScrollDelta).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(400);
+    wheel(notch);
+    expect(scene().addScrollDelta).toHaveBeenCalledTimes(1);
+    expect(scene().addScrollDelta.mock.calls[0][0]).toBeCloseTo(notch / 9000, 6);
+
+    for (let page = count - 2; page >= 0; page--) {
+      vi.advanceTimersByTime(400);
+      wheel(-notch);
+      expect(f.componentInstance.pageIndex()).toBe(page);
+    }
+    vi.advanceTimersByTime(400);
+    wheel(-notch);
+    expect(scene().addScrollDelta).toHaveBeenCalledTimes(2);
+    expect(scene().addScrollDelta.mock.calls[1][0]).toBeCloseTo(-notch / 9000, 6);
+  });
+
+  it('continues to the next stop and wraps back to the start at the end', async () => {
+    const f = await mount();
+    arrive(f, 0);
+    el().querySelector<HTMLButtonElement>('.card-continue')!.click();
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(1);
     f.detectChanges();
-    expect(scene().stepCarousel).toHaveBeenCalledWith(1);
-    expect(f.nativeElement.querySelector('.reader-pagination span').textContent).toContain('2 / 16');
-    expect(scene().setPaused).toHaveBeenLastCalledWith(true);
+    expect(el().querySelector('app-station-card')).toBeNull();
+
+    arrive(f, 6);
+    const button = el().querySelector<HTMLButtonElement>('.card-continue')!;
+    expect(button.textContent).toContain('Walk back to the start');
+    button.click();
+    expect(scene().jumpToStation).toHaveBeenLastCalledWith(0);
+  });
+
+  it('moves focus to the card title only after explicit navigation', async () => {
+    const f = await mount();
+    el().querySelectorAll<HTMLButtonElement>('.mini-map button')[2].click();
+    arrive(f, 2);
+    await f.whenStable();
+    expect(document.activeElement?.id).toBe('card-title');
+
+    // Leaving the stop while the card holds focus hands it back to the canvas.
+    scene().onStationSettled?.(false);
+    f.detectChanges();
+    expect(document.activeElement).toBe(el().querySelector('canvas'));
+  });
+
+  it('starts forest sound only from the sound toggle and remembers the choice', async () => {
+    const f = await mount();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(ambience.start).not.toHaveBeenCalled();
+
+    const toggle = el().querySelector<HTMLButtonElement>('.sound-toggle')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    toggle.click();
+    f.detectChanges();
+    expect(ambience.start).toHaveBeenCalledOnce();
+    expect(localStorage.getItem('forest:sound')).toBe('on');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+    toggle.click();
+    expect(ambience.stop).toHaveBeenCalledOnce();
+    expect(localStorage.getItem('forest:sound')).toBe('off');
+  });
+
+  it('waits for a gesture before resuming a remembered sound preference', async () => {
+    localStorage.setItem('forest:sound', 'on');
+    const f = await mount();
+    expect(f.componentInstance.soundOn()).toBe(true);
+    expect(ambience.start).not.toHaveBeenCalled();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    expect(ambience.start).toHaveBeenCalledOnce();
+    window.dispatchEvent(new PointerEvent('pointerdown'));
+    expect(ambience.start).toHaveBeenCalledOnce();
+  });
+
+  it('opens the settings menu and closes it with Escape or an outside press', async () => {
+    const f = await mount();
+    const toggle = el().querySelector<HTMLButtonElement>('.menu-toggle')!;
+    expect(toggle.getAttribute('aria-haspopup')).toBe('true');
+    toggle.click();
+    f.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    key('Escape', window);
+    f.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    el().querySelector('canvas')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    f.detectChanges();
+    expect(f.componentInstance.menuOpen()).toBe(false);
+  });
+
+  it('shows the card as a bottom sheet on phones that expands and collapses', async () => {
+    mobileLayout = true;
+    const f = await mount();
+    arrive(f, 1);
+    const card = el().querySelector('app-station-card')!;
+    expect(card.classList.contains('sheet')).toBe(true);
+    el().querySelector<HTMLButtonElement>('.sheet-expand')!.click();
+    f.detectChanges();
+    expect(f.componentInstance.sheetExpanded()).toBe(true);
+    expect(card.classList.contains('expanded')).toBe(true);
+
+    key('Escape', window);
+    f.detectChanges();
+    expect(f.componentInstance.sheetExpanded()).toBe(false);
+    expect(card.classList.contains('expanded')).toBe(false);
+
+    const handle = el().querySelector('.sheet-handle')!;
+    handle.dispatchEvent(new PointerEvent('pointerdown', { clientY: 600, bubbles: true }));
+    handle.dispatchEvent(new PointerEvent('pointerup', { clientY: 500, bubbles: true }));
+    expect(f.componentInstance.sheetExpanded()).toBe(true);
+    scene().onActiveZoneChange?.(2);
+    expect(f.componentInstance.sheetExpanded()).toBe(false);
   });
 
   it('normalizes wheel units while allowing browser zoom', async () => {
@@ -227,22 +398,6 @@ describe('Original forest visitor journeys', () => {
     canvas.dispatchEvent(zoom);
     expect(zoom.defaultPrevented).toBe(false);
     expect(scene().addScrollDelta).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens the same written content in a reader and pauses the forest', async () => {
-    const f = await mount();
-    scene().onStationSettled?.(true);
-    f.detectChanges();
-    const dialog = f.nativeElement.querySelector('dialog') as HTMLDialogElement;
-    dialog.showModal = vi.fn(() => dialog.setAttribute('open', ''));
-    f.nativeElement.querySelector('.read-panel').click();
-    expect(dialog.open).toBe(true);
-    expect(scene().setPaused).toHaveBeenCalledWith(true);
-    const about = ACTIVE_ZONES.find((zone) => zone.id === 'about')!;
-    expect(dialog.textContent).toContain(about.payload.name);
-    expect(dialog.textContent).toContain(about.payload.bio.split('\n\n')[0]);
-    dialog.dispatchEvent(new Event('close'));
-    expect(scene().setPaused).toHaveBeenLastCalledWith(false);
   });
 
   it('offers the text route when the 3D engine cannot initialize', async () => {
@@ -281,7 +436,7 @@ describe('Original forest visitor journeys', () => {
     expect(component.form.message).toBe('Keep this message');
   });
 
-  it('releases the renderer and input handlers on navigation away', async () => {
+  it('releases the renderer, sound and input handlers on navigation away', async () => {
     const f = await mount();
     const forest = scene();
     f.destroy();
@@ -289,5 +444,6 @@ describe('Original forest visitor journeys', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'End' }));
     expect(forest.dispose).toHaveBeenCalledOnce();
     expect(forest.jumpToStation).not.toHaveBeenCalled();
+    expect(ambience.dispose).toHaveBeenCalledOnce();
   });
 });

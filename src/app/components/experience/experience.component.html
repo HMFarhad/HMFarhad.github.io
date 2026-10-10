@@ -1,17 +1,31 @@
-<div class="experience-root" [class.ready]="sceneReady()" [class.still]="!motion()"
+<div class="experience-root" [class.ready]="sceneReady()" [class.still]="!motion()" [class.mobile]="isMobile()"
+  [class.card-open]="cardOpen()" [class.sheet-expanded]="cardOpen() && isMobile() && sheetExpanded()"
   [class.tour-active]="tourState() === 'playing' || tourState() === 'paused'">
   <canvas #canvas class="three-canvas" tabindex="0" role="img"
     aria-label="Interactive forest journey. Scroll, drag or use arrow keys to explore. The standard portfolio contains all portfolio content."></canvas>
 
   <header class="hud-top">
     <div class="active-zone" aria-live="polite">
-      <small>now <span>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / {{ zones.length.toString().padStart(2, '0') }}</span></small>
+      <small>Trail stop <span>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / {{ zones.length.toString().padStart(2, '0') }}</span></small>
       <strong>{{ zoneTitle(activeIndex()) }}</strong>
     </div>
-    <div class="hud-actions">
-      <button type="button" class="motion-toggle" (click)="toggleMotion()" [attr.aria-pressed]="!motion()"
-        [attr.aria-label]="motion() ? 'Reduce animation' : 'Enable animation'">{{ motion() ? 'Motion on' : 'Motion reduced' }}</button>
-      <a class="escape" href="/">Back to standard portfolio <span aria-hidden="true">↗</span></a>
+    <div class="corner-menu" #menu [class.open]="menuOpen()">
+      <button type="button" class="menu-toggle" (click)="menuOpen.set(!menuOpen())" aria-haspopup="true"
+        [attr.aria-expanded]="menuOpen()" aria-controls="forest-menu" aria-label="Forest settings">
+        <span class="menu-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="menu-label">Menu</span>
+      </button>
+      <div class="menu-panel" id="forest-menu" role="group" aria-label="Forest settings" [attr.inert]="menuOpen() ? null : ''">
+        <button type="button" class="sound-toggle" (click)="toggleSound()" [attr.aria-pressed]="soundOn()"
+          [attr.aria-label]="soundOn() ? 'Mute forest sound' : 'Play forest sound'">
+          <span class="state" [class.on]="soundOn()" aria-hidden="true"></span>{{ soundOn() ? 'Sound on' : 'Sound off' }}
+        </button>
+        <button type="button" class="motion-toggle" (click)="toggleMotion()" [attr.aria-pressed]="!motion()"
+          [attr.aria-label]="motion() ? 'Reduce animation' : 'Enable animation'">
+          <span class="state" [class.on]="motion()" aria-hidden="true"></span>{{ motion() ? 'Motion on' : 'Motion reduced' }}
+        </button>
+        <a class="escape" href="/">Back to standard portfolio <span aria-hidden="true">↗</span></a>
+      </div>
     </div>
   </header>
 
@@ -27,35 +41,79 @@
     </div>
   }
 
-  <nav class="mini-map" role="navigation" aria-label="Zone navigation">
+  <nav class="mini-map" role="navigation" aria-label="Trail stops">
     <ol>
       @for (z of zones; track z.id; let i = $index) {
-        <li
-          [class.active]="activeIndex() === i"
-          [class.visited]="visitedZones().has(i)"
-          (mouseenter)="hoverIndex.set(i)"
-          (mouseleave)="hoverIndex.set(null)"
-        >
+        <li [class.active]="activeIndex() === i" [class.visited]="visitedZones().has(i)">
           <button type="button" (click)="goToZone(i)" [disabled]="!sceneReady()"
             [attr.aria-current]="activeIndex() === i ? 'step' : null" [attr.aria-label]="z.title">
             <span class="dot" aria-hidden="true"></span>
-            <span class="num">{{ (i + 1).toString().padStart(2, '0') }}</span>
-            <span class="lbl">{{ z.title }}</span>
+            <span class="lbl" aria-hidden="true">{{ z.title }}</span>
           </button>
         </li>
       }
     </ol>
   </nav>
 
-  @if (settled() && !isContactActive()) {
-    <button type="button" class="read-panel" (click)="openReader()">Read panel <span aria-hidden="true">↗</span></button>
+  @if (cardOpen()) {
+    <app-station-card
+      [zone]="zones[activeIndex()]" [index]="activeIndex()" [count]="zones.length"
+      [page]="pageIndex()" [pageCount]="pageCount()" [mobile]="isMobile()" [expanded]="sheetExpanded()"
+      (pageChange)="stepCard($event)" (continue)="continueTrail()"
+      (overscroll)="onCardOverscroll($event)" (expandedChange)="sheetExpanded.set($event)">
+      <div contact class="contact-slot">
+        @if (isContactActive() && contactLinks(); as c) {
+          <div class="contact-overlay" role="group" aria-label="Contact links">
+            @if (!formOpen()) {
+              <a class="contact-pill primary" [href]="'mailto:' + c.email"><span aria-hidden="true">✉</span> {{ c.email }}</a>
+              <button type="button" class="contact-pill form-toggle" (click)="toggleForm()"><span aria-hidden="true">✍</span> Send a message</button>
+              <div class="contact-links">
+                @for (l of c.links; track l.url) {
+                  <a class="contact-pill" [href]="l.url" target="_blank" rel="noopener noreferrer"
+                    [attr.aria-label]="l.label">{{ l.label.split(' — ')[0] }} <span aria-hidden="true">↗</span></a>
+                }
+              </div>
+            } @else {
+              <form class="contact-form" (ngSubmit)="onSubmit()" #f="ngForm" novalidate>
+                <div class="form-head">
+                  <h3>Drop a line</h3>
+                  <button type="button" class="form-close" (click)="closeForm()" aria-label="Close form">✕</button>
+                </div>
+                @if (!emailConfigured()) {
+                  <p class="form-note">Direct send isn't configured here — submitting will open your email client.</p>
+                }
+                <div class="row">
+                  <input type="text" name="name" placeholder="Your name" aria-label="Your name" required
+                         [(ngModel)]="form.name" autocomplete="name" />
+                  <input type="email" name="email" placeholder="Your email" aria-label="Your email" required
+                         [(ngModel)]="form.email" autocomplete="email" />
+                </div>
+                <input type="text" name="subject" placeholder="Subject" aria-label="Subject" required
+                       [(ngModel)]="form.subject" />
+                <textarea name="message" placeholder="Message" aria-label="Message" rows="4" required minlength="5"
+                          [(ngModel)]="form.message"></textarea>
+                @if (submitMsg()) {
+                  <div class="form-status" role="status" [class.ok]="submitOk()" [class.err]="submitOk() === false">
+                    {{ submitMsg() }}
+                  </div>
+                }
+                <button type="submit" class="contact-pill primary submit"
+                        [disabled]="isSubmitting() || !formValid()">
+                  {{ isSubmitting() ? 'Sending…' : 'Send' }}
+                </button>
+              </form>
+            }
+          </div>
+        }
+      </div>
+    </app-station-card>
   }
 
   @if (sceneReady() && tourState() === 'idle' && activeIndex() === 0) {
     <div class="tour-launch">
       <button type="button" (click)="startTour()" aria-label="Start guided journey through all seven portfolio stops">
         <span class="play-icon" aria-hidden="true">▶</span>
-        <span><strong>Start guided journey</strong><small>About 3 minutes · includes every panel</small></span>
+        <span><strong>Start guided journey</strong><small>About 3 minutes · every page</small></span>
       </button>
     </div>
   }
@@ -66,19 +124,19 @@
         <small>{{ tourState() === 'paused' ? 'Journey paused' : 'Guided journey' }}</small>
         <strong>{{ (activeIndex() + 1).toString().padStart(2, '0') }} / {{ zones.length.toString().padStart(2, '0') }} · {{ zoneTitle(activeIndex()) }}</strong>
         @if (carousel(); as guidedCard) {
-          <span class="tour-card-count">Panel {{ guidedCard.index + 1 }} / {{ guidedCard.count }}</span>
+          <span class="tour-card-count">Page {{ guidedCard.index + 1 }} / {{ guidedCard.count }}</span>
         }
         @if (settled()) {
           <div class="tour-wait-row">
-            <div class="tour-wait-track" role="progressbar" aria-label="Reading time before the next stop"
+            <div class="tour-wait-track" role="progressbar" aria-label="Reading time before the next page"
               aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="(tourProgress() * 100).toFixed(0)"
-              [attr.aria-valuetext]="tourState() === 'paused' ? 'Paused' : tourSecondsRemaining() + ' seconds until the next stop'">
+              [attr.aria-valuetext]="tourState() === 'paused' ? 'Paused' : tourSecondsRemaining() + ' seconds until the next page'">
               <span [style.width.%]="tourProgress() * 100"></span>
             </div>
             <em>{{ tourState() === 'paused' ? 'paused' : 'next in ' + tourSecondsRemaining() + 's' }}</em>
           </div>
         } @else {
-          <div class="tour-travelling">Moving to stop…</div>
+          <div class="tour-travelling">Walking to the next stop…</div>
         }
       </div>
       <div class="tour-actions">
@@ -102,125 +160,13 @@
     </section>
   }
 
-  <dialog #reader class="panel-reader" aria-labelledby="reader-title" (close)="resumeJourney()">
-    <div class="reader-heading">
-      <span id="reader-title">{{ zoneTitle(activeIndex()) }}</span>
-      <button type="button" (click)="reader.close()" aria-label="Close panel">✕</button>
-    </div>
-    @let z = zones[activeIndex()];
-    @switch (z.id) {
-      @case ('about') {
-        <h2>{{ z.payload.name }}</h2><p class="reader-accent">{{ z.payload.tagline }}</p>
-        @for (paragraph of z.payload.bio.split('\n\n'); track $index) { <p>{{ paragraph }}</p> }
-      }
-      @case ('skills') {
-        @for (group of z.payload.groups; track group.name) {
-          <h2>{{ group.name }}</h2><ul>@for (item of group.items; track item) { <li>{{ item }}</li> }</ul>
-        }
-      }
-      @case ('experience') {
-        @let job = z.payload.items[carousel()?.index ?? 0];
-        <h2>{{ job.role }}</h2><p class="reader-accent">{{ job.company }} · {{ job.period }}</p>
-        <p>{{ job.blurb }}</p><p>{{ job.summary }}</p>
-        <h3>Key contributions</h3><ul>@for (item of job.highlights; track item) { <li>{{ item }}</li> }</ul>
-        <h3>Challenge</h3><p>{{ job.challenge }}</p><h3>Resolution</h3><p>{{ job.resolution }}</p>
-        <p class="reader-accent">{{ job.tech.join(' · ') }}</p>
-      }
-      @case ('projects') {
-        @let project = z.payload.items[carousel()?.index ?? 0];
-        <h2>{{ project.name }}</h2>
-        @if (project.imageUrl) { <img [src]="project.imageUrl" [alt]="project.name" /> }
-        <p>{{ project.blurb }}</p><p class="reader-accent">{{ project.tech.join(' · ') }}</p>
-        @if (project.link) { <a [href]="project.link" target="_blank" rel="noopener noreferrer">{{ project.linkLabel || 'Visit Site' }} ↗</a> }
-      }
-      @case ('education') {
-        @for (item of z.payload.items; track $index) {
-          <h2>{{ item.institution }}</h2><p class="reader-accent">{{ item.degree }} · {{ item.period }}</p>
-          @if (item.details) { <p>{{ item.details }}</p> }
-        }
-      }
-      @case ('blogs') {
-        @let blog = z.payload.items[carousel()?.index ?? 0];
-        <h2>{{ blog.title }}</h2><p class="reader-accent">{{ blog.date }} {{ blog.readTime }}</p>
-        <p>{{ blog.excerpt }}</p><a [href]="blog.url" target="_blank" rel="noopener noreferrer">Read article ↗</a>
-      }
-    }
-    @if (carousel(); as readerCard) {
-      <div class="reader-pagination" role="group" [attr.aria-label]="zoneTitle(activeIndex()) + ' pages'">
-        <button type="button" (click)="stepCard(-1)" [disabled]="readerCard.index === 0">← Previous</button>
-        <span aria-live="polite">{{ readerCard.index + 1 }} / {{ readerCard.count }}</span>
-        <button type="button" (click)="stepCard(1)" [disabled]="readerCard.index === readerCard.count - 1">Next →</button>
-      </div>
-    }
-  </dialog>
-
-  @if (carousel(); as card) {
-    <div class="carousel-controls" role="group" aria-label="Panel navigation">
-      <button type="button" (click)="stepCard(-1)" [disabled]="card.index === 0" aria-label="Previous card">←</button>
-      <span aria-live="polite"><b>{{ zoneTitle(activeIndex()) }}</b> · {{ card.index + 1 }} <span class="of">/ {{ card.count }}</span></span>
-      <button type="button" (click)="stepCard(1)" [disabled]="card.index === card.count - 1" aria-label="Next card">→</button>
-    </div>
-  }
-
   @if (showHint() && !(sceneReady() && tourState() === 'idle' && activeIndex() === 0)) {
     <div class="hint" aria-hidden="true">
-      <span>{{ isMobile() ? 'Swipe to walk · tap panels · use zone map' : 'Scroll · drag · arrow keys to walk the path' }}</span>
+      <span>{{ isMobile() ? 'Swipe to walk · tap a landmark · use the trail dots' : 'Scroll · drag · arrow keys to walk the path' }}</span>
     </div>
   }
 
   @if (hoverIndex() !== null) {
-    <div class="tooltip">{{ zoneTitle(hoverIndex()) }}</div>
-  }
-
-  @if (isContactActive() && contactLinks(); as c) {
-    <div class="contact-overlay" role="region" aria-label="Contact links">
-      @if (!formOpen()) {
-        <a class="contact-pill primary" [href]="'mailto:' + c.email">
-          ✉ {{ c.email }}
-        </a>
-        <button type="button" class="contact-pill form-toggle" (click)="toggleForm()">
-          ✍ Send a message
-        </button>
-        <div class="contact-links">
-          @for (l of c.links; track l.url) {
-            <a class="contact-pill" [href]="l.url" target="_blank" rel="noopener noreferrer"
-              [attr.aria-label]="l.label">
-              {{ isMobile() ? l.label.split(' — ')[0] : l.label }} ↗
-            </a>
-          }
-        </div>
-      } @else {
-        <form class="contact-form" (ngSubmit)="onSubmit()" #f="ngForm" novalidate>
-          <button type="button" class="form-close" (click)="closeForm()" aria-label="Close form">✕</button>
-          <h3>Drop a line</h3>
-
-          @if (!emailConfigured()) {
-            <p class="form-note">Direct send isn't configured here — submitting will open your email client.</p>
-          }
-
-          <div class="row">
-            <input type="text" name="name" placeholder="Your name" aria-label="Your name" required
-                   [(ngModel)]="form.name" autocomplete="name" />
-            <input type="email" name="email" placeholder="Your email" aria-label="Your email" required
-                   [(ngModel)]="form.email" autocomplete="email" />
-          </div>
-          <input type="text" name="subject" placeholder="Subject" aria-label="Subject" required
-                 [(ngModel)]="form.subject" />
-          <textarea name="message" placeholder="Message" aria-label="Message" rows="4" required minlength="5"
-                    [(ngModel)]="form.message"></textarea>
-
-          @if (submitMsg()) {
-            <div class="form-status" role="status" [class.ok]="submitOk()" [class.err]="submitOk() === false">
-              {{ submitMsg() }}
-            </div>
-          }
-
-          <button type="submit" class="contact-pill primary submit"
-                  [disabled]="isSubmitting() || !formValid()">
-            {{ isSubmitting() ? 'Sending…' : 'Send' }}
-          </button>
-        </form>
-      }
-    </div>
+    <div class="tooltip" aria-hidden="true">{{ zoneTitle(hoverIndex()) }}</div>
   }
 </div>

@@ -1,41 +1,72 @@
 import * as THREE from 'three';
-import { applyEnvironment }    from './world/environment';
-import { buildLighting }       from './world/sky';
-import { buildGround }         from './world/ground';
-import { Forest }              from './world/forest';
-import { GodRays }             from './world/godrays';
+import { ACTIVE_ZONES } from '../core/content/zones';
+import { isMobileLayout } from '../core/device';
+import { QUALITY, initialTier, lowerTier, type QualityProfile, type QualityTier } from './world/quality';
+import { TrailField } from './world/trail-field';
+import { planLandmarkAnchors, type LandmarkAnchor } from './world/landmark-plan';
+import { Terrain } from './world/terrain';
+import { Lighting } from './world/lighting';
+import { applyEnvironment } from './world/environment';
+import { createWorldClock, type WorldClock } from './world/cards';
+import { Forest } from './world/forest';
+import { Undergrowth } from './world/undergrowth';
+import { Canopy } from './world/canopy';
 import { buildStationLandmarks, type StationLandmarksHandle } from './world/landmarks';
-import { ACTIVE_ZONES }        from '../core/content/zones';
-import { isMobileLayout }      from '../core/device';
+import { Mist } from './world/mist';
+import { LightShafts } from './world/lightshafts';
+import { Particles } from './world/particles';
+import { Wildlife } from './world/wildlife';
+import { clearTextureCache } from './world/textures';
 
 const SCROLL_EASE    = 5;
 const SNAP_THRESHOLD = 0.009;
 const SNAP_IDLE_MS   = 350;
-const FOG_PALETTE = [0x7a8973, 0x718477, 0x687e78, 0x687984, 0x7d846f, 0x6f8078, 0x817a6d]
+const EYE_HEIGHT     = 1.62;
+const MAX_QUALITY_ADJUSTMENTS = 2;
+/** Below this aspect the view is re-centred above the mobile bottom sheet. */
+const PORTRAIT_ASPECT = 0.85;
+/** Fraction of the view height the horizon is raised by on portrait screens. */
+const PORTRAIT_SHIFT = 0.2;
+
+/** Pale, cool morning fog per station; it is also the sky (no horizon). */
+const MIST_PALETTE = [0xc4ccc6, 0xbfcbc9, 0xc2c9cf, 0xbcc9d0, 0xc6cbc3, 0xbcc6c4, 0xd0c8be]
   .map((hex) => new THREE.Color(hex));
-const LIGHT_PALETTE = [0xffe0ae, 0xcfe9d7, 0xbde4dd, 0xc6d9f2, 0xffe3ad, 0xc8e9dd, 0xffd5a0]
+/** Sun tint per station; the last stop runs slightly warm for the campfire. */
+const LIGHT_PALETTE = [0xe4edf4, 0xdfeaf0, 0xdde8f2, 0xd8e6f2, 0xe6ecef, 0xd9ebe6, 0xf2dcc3]
   .map((hex) => new THREE.Color(hex));
 
 export class ForestScene {
   // public callbacks (wired by ExperienceComponent)
   onActiveZoneChange: ((idx: number) => void) | null = null;
   onLandmarkHover:    ((idx: number | null) => void) | null = null;
-  onStationSettled: ((settled: boolean) => void) | null = null;
-  onCarouselChange: ((state: { index: number; count: number } | null) => void) | null = null;
+  onStationSettled:   ((settled: boolean) => void) | null = null;
 
   private renderer!: THREE.WebGLRenderer;
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
+  private fog!: THREE.FogExp2;
+
+  private tier: QualityTier;
+  private profile: QualityProfile;
+  private readonly clock: WorldClock = createWorldClock();
 
   private curve!: THREE.CatmullRomCurve3;
   private trailLen = 1;
   private stationProgress: number[] = [];
   private stationCount: number;
+  private field!: TrailField;
+  private anchors: LandmarkAnchor[] = [];
 
+  private terrain!: Terrain;
+  private lighting!: Lighting;
   private forest!: Forest;
-  private godRays!: GodRays;
+  private undergrowth!: Undergrowth;
+  private canopy!: Canopy;
   private landmarks!: StationLandmarksHandle;
-  private keyLight!: THREE.DirectionalLight;
+  private mist!: Mist;
+  private shafts!: LightShafts;
+  private particles!: Particles;
+  private wildlife!: Wildlife;
 
   // scroll state
   private targetProgress  = 0;
@@ -46,15 +77,23 @@ export class ForestScene {
   private motion = true;
   private settled = false;
   private lastHover: number | null = null;
-  private lastCarousel = '';
   private viewMatrix = new THREE.Matrix4();
   private viewQuaternion = new THREE.Quaternion();
   private previousProgress = 0;
   private smoothedSpeed = 0;
+  private cameraY = NaN;
+  private viewAspect = 1;
+  private readonly focus = new THREE.Vector3();
+  private lookY = NaN;
+  private readonly camPos = new THREE.Vector3();
+  private readonly lookAt = new THREE.Vector3();
+  private readonly tangent = new THREE.Vector3();
+  private readonly forward = new THREE.Vector3();
   private renderPixelRatio = 1;
   private qualityElapsed = 0;
   private qualityFrames = 0;
-  private qualityAdjusted = false;
+  private qualityAdjustments = 0;
+  private qualitySettled = false;
   private disposeEnvironment: (() => void) | null = null;
 
   // pointer + raycaster
@@ -72,36 +111,55 @@ export class ForestScene {
   constructor(private canvas: HTMLCanvasElement, stationCount: number) {
     this.stationCount = stationCount;
     this.mobile = isMobileLayout();
+    this.tier = initialTier(this.mobile);
+    this.profile = QUALITY[this.tier];
 
     this.initRenderer();
     this.initScene();
     this.initCamera();
 
+    // Trail first: everything else is placed relative to it.
     this.buildTrail();
-    // Synchronous fallback colour BEFORE async HDRI:
-    this.scene.background = new THREE.Color(0x6a7468);
-    this.renderer.setClearColor(0x6a7468, 1);
+    const tmp = new THREE.Vector3();
+    this.field = TrailField.fromSampler((u) => this.curve.getPointAt(u, tmp), 1200);
+    const zones = ACTIVE_ZONES.slice(0, this.stationCount);
+    this.anchors = planLandmarkAnchors(zones, this.stationProgress, this.curve, this.field);
 
-    void applyEnvironment(this.scene, this.renderer, () => this.disposed).then((dispose) => {
-      if (this.disposed) dispose?.();
-      else this.disposeEnvironment = dispose;
-    });
-    this.keyLight = buildLighting(this.scene);
+    // Terrain fills anchor.y, so it must exist before anything is placed on it.
+    this.terrain = new Terrain(this.field, this.anchors, this.profile);
+    this.scene.add(this.terrain.mesh);
 
-    this.landmarks = buildStationLandmarks(ACTIVE_ZONES, this.stationProgress, this.curve);
-    this.scene.add(this.landmarks.group);
-    this.applyViewportLayout();
+    this.lighting = new Lighting(this.scene, this.profile);
+    if (this.profile.environment) {
+      void applyEnvironment(this.scene, this.renderer, () => this.disposed).then((dispose) => {
+        if (this.disposed) dispose?.();
+        else this.disposeEnvironment = dispose;
+      });
+    }
 
-    this.scene.add(buildGround(400));
-
-    const forestCfg = this.mobile ? { trunkCount: 200, bushCount: 100 } : undefined;
-    this.forest = new Forest(this.curve, this.trailLen, forestCfg);
+    this.forest = new Forest(this.field, this.terrain, this.anchors, this.profile, this.clock);
     this.scene.add(this.forest.group);
+    this.undergrowth = new Undergrowth(this.field, this.terrain, this.anchors, this.profile, this.clock);
+    this.scene.add(this.undergrowth.group);
+    this.canopy = new Canopy(this.field, this.terrain, this.profile, this.clock, this.forest.crownsNear(this.field, 9));
+    this.scene.add(this.canopy.group);
 
-    this.godRays = new GodRays(this.curve);
-    this.scene.add(this.godRays.group);
+    this.landmarks = buildStationLandmarks(
+      zones, this.anchors, this.stationProgress, this.terrain,
+      this.forest.barkMat, this.clock, this.profile, this.camera,
+    );
+    this.scene.add(this.landmarks.group);
 
-    this.placeCameraAtProgress(0);
+    this.mist = new Mist(this.field, this.terrain, this.profile);
+    this.scene.add(this.mist.group);
+    this.shafts = new LightShafts(this.field, this.terrain, this.lighting.sunDir, this.profile);
+    this.scene.add(this.shafts.group);
+    this.particles = new Particles(this.terrain, this.profile, this.clock);
+    this.scene.add(this.particles.group);
+    this.wildlife = new Wildlife(this.field, this.anchors, this.profile);
+    this.scene.add(this.wildlife.group);
+
+    this.placeCameraAtProgress(0, 1, true);
 
     this.resizeHandler = () => this.onResize();
     window.addEventListener('resize', this.resizeHandler);
@@ -118,56 +176,23 @@ export class ForestScene {
   addScrollDelta(d: number): void {
     this.travel = null;
     d = THREE.MathUtils.clamp(d, -0.04, 0.04);
-    // If the user is parked at a zone whose panel owns a carousel,
-    // feed the scroll into the
-    // carousel first. Only the leftover delta — once the carousel has
-    // hit its last (or first) card — moves the walker along the trail.
-    if (
-      this.activeIndex >= 0 &&
-      this.landmarks &&
-      Math.abs(this.currentProgress - this.stationProgress[this.activeIndex]) < 0.006
-    ) {
-      d = this.landmarks.nudgeCarousel(this.activeIndex, d);
-      if (d === 0) {
-        this.lastScrollAt = performance.now();
-        return;
-      }
-    }
     this.targetProgress = THREE.MathUtils.clamp(this.targetProgress + d, 0, 1);
     if (!this.motion) this.currentProgress = this.targetProgress;
     this.lastScrollAt = performance.now();
   }
+
   setPointer(x: number, y: number): void {
     this.pointer.set(x, y);
   }
+
+  /** Station whose landmark is under the pointer, or null. */
   pickStation(): number | null {
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.panelHits();
-    if (!hits.length) return null;
-    const idx = hits[0].object.userData['stationIndex'];
-    return typeof idx === 'number' ? idx : null;
+    return this.proxyUnderPointer();
   }
-  /**
-   * Hit-test the holo-panel under the current pointer for a clickable
-   * region (currently just the project "Visit Site" pills). Returns the
-   * URL to open or null if no link sits under the pointer.
-   */
-  pickLink(): string | null {
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.panelHits();
-    for (const h of hits) {
-      if (!h.object.userData['isPanel']) continue;
-      const idx = h.object.userData['stationIndex'];
-      const uv = h.uv;
-      if (typeof idx !== 'number' || !uv) return null;
-      return this.landmarks.pickLink(idx, uv.x, uv.y);
-    }
-    return null;
-  }
+
   jumpToStation(idx: number): void {
     if (idx < 0 || idx >= this.stationProgress.length) return;
     this.settled = false;
-    this.lastCarousel = '';
     this.onStationSettled?.(false);
     this.targetProgress = this.stationProgress[idx];
     if (this.motion) {
@@ -182,23 +207,12 @@ export class ForestScene {
     this.lastScrollAt = performance.now();
   }
 
-  private panelHits(): THREE.Intersection[] {
-    return this.raycaster.intersectObject(this.landmarks.group, true).filter((hit) => {
-      const mesh = hit.object as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
-      return mesh.visible && mesh.userData['isPanel'] && mesh.material.opacity > 0.2;
-    });
-  }
-
   setMotion(enabled: boolean): void {
     this.motion = enabled;
     if (!enabled) {
       this.currentProgress = this.targetProgress;
       this.travel = null;
     }
-  }
-
-  stepCarousel(direction: number): boolean {
-    return this.settled ? this.landmarks.stepCarousel(this.activeIndex, direction) : false;
   }
 
   setPaused(paused: boolean): void {
@@ -214,10 +228,21 @@ export class ForestScene {
     window.visualViewport?.removeEventListener('resize', this.resizeHandler);
     this.resizeObserver?.disconnect();
     this.disposeEnvironment?.();
+    this.disposeEnvironment = null;
+    this.terrain?.dispose();
+    this.forest?.dispose();
+    this.undergrowth?.dispose();
+    this.canopy?.dispose();
+    this.landmarks?.dispose();
+    this.mist?.dispose();
+    this.shafts?.dispose();
+    this.particles?.dispose();
+    this.wildlife?.dispose();
+    this.lighting?.dispose();
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();
-    this.scene.traverse((o) => {
+    this.scene?.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) geometries.add(m.geometry);
       if (m.material) {
@@ -227,77 +252,109 @@ export class ForestScene {
           Object.values(material).forEach((value) => {
             if (value instanceof THREE.Texture) textures.add(value);
           });
+          const uniforms = (material as THREE.ShaderMaterial).uniforms;
+          if (uniforms) {
+            Object.values(uniforms).forEach((u) => {
+              if (u?.value instanceof THREE.Texture) textures.add(u.value);
+            });
+          }
         }
       }
     });
     textures.forEach((t) => t.dispose());
     materials.forEach((m) => m.dispose());
     geometries.forEach((g) => g.dispose());
-    this.renderer.dispose();
+    clearTextureCache();
+    this.renderer?.dispose();
   }
 
   // ---------------- init ----------------
   private initRenderer(): void {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: !this.mobile,
+      antialias: this.profile.antialias,
       powerPreference: this.mobile ? 'low-power' : 'high-performance',
     });
-    const maxDpr = this.mobile ? 1.5 : 2;
-    this.renderPixelRatio = Math.min(window.devicePixelRatio, maxDpr);
+    this.renderPixelRatio = Math.min(window.devicePixelRatio, this.profile.maxDpr);
     this.renderer.setPixelRatio(this.renderPixelRatio);
     this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
-    this.renderer.outputColorSpace      = THREE.SRGBColorSpace;
-    this.renderer.toneMapping           = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure   = 1.05;
-  }
-  private initScene(): void {
-    this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x7a8973, 18, 120);
-  }
-  private initCamera(): void {
-    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-    this.camera = new THREE.PerspectiveCamera(this.fovForAspect(aspect), aspect, 0.1, 500);
+    this.renderer.outputColorSpace    = THREE.SRGBColorSpace;
+    this.renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled   = this.profile.shadows;
+    // PCFSoftShadowMap is deprecated in three r0.184; PCF with a radius is the soft path.
+    this.renderer.shadowMap.type      = THREE.PCFShadowMap;
   }
 
-  /** Wider FOV on small screens so holo panels stay in frame. */
+  private initScene(): void {
+    this.scene = new THREE.Scene();
+    this.fog = new THREE.FogExp2(MIST_PALETTE[0].getHex(), this.profile.fogDensity);
+    this.scene.fog = this.fog;
+    // The very same Color instance: the per-station palette lerp moves the sky
+    // and the fog together, so distant geometry dissolves with no horizon line.
+    this.scene.background = this.fog.color;
+  }
+
+  private initCamera(): void {
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    this.camera = new THREE.PerspectiveCamera(this.fovForAspect(aspect), aspect, 0.1, this.profile.cameraFar);
+    this.applyFraming(this.canvas.clientWidth, this.canvas.clientHeight);
+  }
+
+  /**
+   * Portrait phones show the station card as a bottom sheet, so the view is
+   * re-centred with a view offset: the optical axis (horizon) sits ~30% from
+   * the top and the landmark stays visible above the sheet.
+   */
+  private applyFraming(w: number, h: number): void {
+    w = Math.max(1, w);
+    h = Math.max(1, h);
+    this.viewAspect = w / h;
+    if (this.viewAspect < PORTRAIT_ASPECT) {
+      const fullH = h * (1 + 2 * PORTRAIT_SHIFT);
+      this.camera.aspect = w / fullH;
+      this.camera.fov = this.fovForAspect(this.viewAspect);
+      this.camera.setViewOffset(w, fullH, 0, fullH - h, w, h);
+    } else {
+      this.camera.aspect = this.viewAspect;
+      this.camera.fov = this.fovForAspect(this.viewAspect);
+      this.camera.clearViewOffset();
+    }
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Vertical FOV; wider on portrait / small screens so the landmark stays in frame. */
   private fovForAspect(aspect: number): number {
-    if (aspect < 0.85) return 68;
+    // Portrait: the full (offset) frustum is taller than the visible window.
+    if (aspect < PORTRAIT_ASPECT) return 90;
     if (aspect < 1.15) return 60;
     if (this.mobile && aspect < 1.6) return 58;
     return 55;
   }
 
-  private applyViewportLayout(): void {
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
-    if (w < 1 || h < 1) return;
-    this.landmarks.setViewport(w, h);
-  }
-
   // ---------------- trail ----------------
   private buildTrail(): void {
     const SCALE = 6;
+    // A loop through the forest. The return leg swings wide (the original
+    // waypoints ran it 3-6 m beside the outbound leg for ~150 m, which read as
+    // a double road once the corridor was narrowed); legs now stay >= 15 m apart.
     const wp = [
       { x:   0, z:   0 },
-      { x:   1, z:   5 },
-      { x:   7, z:  11 },
-      { x:  -4, z:   4 },
+      { x:   0, z:   5 },
+      { x:   8, z:  10 },
+      { x:  -4, z:   7 },
       { x: -20, z: -20 },
-      { x:  -6, z:   0 },
-      { x:   0, z:   0 }
+      { x:  -3, z: -13 },
+      { x:  -2, z:  -3 },
     ];
-    const points = wp.map((p, i) =>
-      new THREE.Vector3(p.x * SCALE, Math.sin(i * 1.3) * 0.6, p.z * SCALE)
-    );
-    // 'centripetal' avoids the overshoot/loop you get with default 'catmullrom'
-    // at the (-20,-20) → (-6,0) sharp turn.
+    // y = 0: every height comes from the terrain.
+    const points = wp.map((p) => new THREE.Vector3(p.x * SCALE, 0, p.z * SCALE));
+    // 'centripetal' avoids overshoot/loops at the sharp turns.
     this.curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.5);
 
     const lengths = this.curve.getLengths(200);
     this.trailLen = lengths[lengths.length - 1];
 
-    // Distribute one station per waypoint (or evenly across if mismatch).
     const n = this.stationCount;
     this.stationProgress = [];
     for (let i = 0; i < n; i++) {
@@ -311,63 +368,142 @@ export class ForestScene {
   }
 
   // ---------------- camera ----------------
-  private placeCameraAtProgress(p: number, dt = 1): void {
-    const pos = this.curve.getPointAt(p);
+  private placeCameraAtProgress(p: number, dt = 1, snap = false): void {
+    const pos = this.curve.getPointAt(p, this.camPos);
 
-    // Pick a forward look-target. Near the end of the trail (p ≈ 1) the
-    // naive `getPointAt(p + 0.02)` clamps to the same point as `pos`, so
-    // the lookAt collapses to a straight-down vector. Instead, when we
-    // are near the end, look BACK along the tangent (extrapolate forward
-    // using the tangent at the end) so the camera stays level.
-    let lookAt: THREE.Vector3;
+    // Near the end of the trail `getPointAt(p + lookAhead)` collapses onto
+    // `pos`; extrapolate along the final tangent instead so the view stays level.
     const lookAhead = 0.016 + Math.min(0.018, Math.abs(this.smoothedSpeed) * 0.012);
     if (p < 1 - lookAhead) {
-      lookAt = this.curve.getPointAt(Math.min(1, p + lookAhead));
+      this.curve.getPointAt(Math.min(1, p + lookAhead), this.lookAt);
     } else {
-      const tan = this.curve.getTangentAt(1).clone().normalize();
-      lookAt = pos.clone().add(tan.multiplyScalar(2));
+      this.curve.getTangentAt(1, this.tangent).normalize();
+      this.lookAt.copy(pos).addScaledVector(this.tangent, 6);
     }
 
-    // The ground is level: keep eye height stable through the original route.
-    pos.y = 1.65;
-    lookAt.y = 1.5;
-    this.camera.position.copy(pos);
-    this.viewMatrix.lookAt(pos, lookAt, this.camera.up);
-    this.viewQuaternion.setFromRotationMatrix(this.viewMatrix);
-    this.camera.quaternion.slerp(this.viewQuaternion, this.motion ? 1 - Math.exp(-12 * dt) : 1);
+    // Eye height follows the terrain (eased while moving, exact otherwise).
+    const eyeY = this.terrain.heightAt(pos.x, pos.z) + EYE_HEIGHT;
+    let lookTargetY = this.terrain.heightAt(this.lookAt.x, this.lookAt.z) + EYE_HEIGHT - 0.15;
 
-    const baseFov = this.fovForAspect(this.camera.aspect);
+    // Arriving at a stop: turn toward its landmark. Strongly on narrow portrait
+    // screens (the landmark is otherwise outside the ~35 degree wide view),
+    // gently on wide ones where it is already in frame.
+    let nearest = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < this.stationProgress.length; i++) {
+      const d = Math.abs(this.stationProgress[i] - p);
+      if (d < bestD) { bestD = d; nearest = i; }
+    }
+    const proxy = this.landmarks?.hitProxies[nearest];
+    if (proxy) {
+      const strength = this.viewAspect < PORTRAIT_ASPECT ? 0.8 : this.viewAspect < 1.15 ? 0.5 : 0.22;
+      const w = (1 - THREE.MathUtils.smoothstep(bestD, 0.003, 0.03)) * strength;
+      if (w > 0) {
+        this.focus.copy(proxy.position);
+        this.lookAt.x += (this.focus.x - this.lookAt.x) * w;
+        this.lookAt.z += (this.focus.z - this.lookAt.z) * w;
+        lookTargetY += (this.focus.y - 0.4 - lookTargetY) * w;
+      }
+    }
+    if (snap || !this.motion || !Number.isFinite(this.cameraY)) {
+      this.cameraY = eyeY;
+      this.lookY = lookTargetY;
+    } else {
+      const k = 1 - Math.exp(-8 * dt);
+      this.cameraY += (eyeY - this.cameraY) * k;
+      this.lookY += (lookTargetY - this.lookY) * k;
+    }
+    pos.y = this.cameraY;
+    this.lookAt.y = this.lookY;
+
+    this.camera.position.copy(pos);
+    this.viewMatrix.lookAt(pos, this.lookAt, this.camera.up);
+    this.viewQuaternion.setFromRotationMatrix(this.viewMatrix);
+    this.camera.quaternion.slerp(this.viewQuaternion, this.motion && !snap ? 1 - Math.exp(-12 * dt) : 1);
+
+    const baseFov = this.fovForAspect(this.viewAspect);
     const targetFov = baseFov + Math.min(2.2, Math.abs(this.smoothedSpeed) * 1.5);
     const nextFov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-5 * dt));
     if (Math.abs(nextFov - this.camera.fov) > 0.01) {
       this.camera.fov = nextFov;
       this.camera.updateProjectionMatrix();
     }
+    this.camera.updateMatrixWorld();
   }
 
   private updateAtmosphere(activeIdx: number, dt: number): void {
-    const idx = THREE.MathUtils.clamp(activeIdx, 0, FOG_PALETTE.length - 1);
+    const idx = THREE.MathUtils.clamp(activeIdx, 0, MIST_PALETTE.length - 1);
     const blend = this.motion ? 1 - Math.exp(-0.65 * dt) : 1;
-    const fog = this.scene.fog as THREE.Fog | null;
-    if (fog) fog.color.lerp(FOG_PALETTE[idx], blend);
-    this.keyLight.color.lerp(LIGHT_PALETTE[idx], blend);
-    this.keyLight.intensity = THREE.MathUtils.lerp(this.keyLight.intensity, idx === 6 ? 1.28 : 1.15, blend);
+    // scene.background is this same Color instance.
+    this.fog.color.lerp(MIST_PALETTE[idx], blend);
+    const sun = this.lighting.sun;
+    sun.color.lerp(LIGHT_PALETTE[idx], blend);
+    const target = this.lighting.baseSunIntensity * (idx === LIGHT_PALETTE.length - 1 ? 1.08 : 1);
+    sun.intensity = THREE.MathUtils.lerp(sun.intensity, target, blend);
   }
 
+  // ---------------- quality ----------------
   private monitorQuality(rawDt: number): void {
-    if (this.qualityAdjusted || document.hidden) return;
+    if (this.qualitySettled || document.hidden) return;
     this.qualityElapsed += rawDt;
-    if (this.qualityElapsed < 1) return;
+    if (this.qualityElapsed < 1) return; // ignore shader-compile warm-up
     this.qualityFrames++;
     if (this.qualityElapsed < 4) return;
-    const measuredSeconds = this.qualityElapsed - 1;
-    const fps = this.qualityFrames / Math.max(0.1, measuredSeconds);
-    if (fps < 48 && this.renderPixelRatio > 1) {
-      this.renderPixelRatio = Math.max(1, this.renderPixelRatio * 0.8);
-      this.renderer.setPixelRatio(this.renderPixelRatio);
-      this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
+    const fps = this.qualityFrames / Math.max(0.1, this.qualityElapsed - 1);
+    const next = lowerTier(this.tier);
+    if (fps < 48 && next && this.qualityAdjustments < MAX_QUALITY_ADJUSTMENTS) {
+      this.applyTier(next);
+      this.qualityAdjustments++;
+      this.qualityElapsed = 0;
+      this.qualityFrames = 0;
+      if (this.qualityAdjustments >= MAX_QUALITY_ADJUSTMENTS) this.qualitySettled = true;
+    } else {
+      this.qualitySettled = true;
     }
-    this.qualityAdjusted = true;
+  }
+
+  /** Drop to a cheaper tier without rebuilding anything. */
+  private applyTier(tier: QualityTier): void {
+    const prev = this.profile;
+    this.tier = tier;
+    this.profile = QUALITY[tier];
+    const p = this.profile;
+
+    this.renderPixelRatio = Math.min(window.devicePixelRatio, p.maxDpr);
+    this.renderer.setPixelRatio(this.renderPixelRatio);
+    this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
+    this.fog.density = p.fogDensity;
+    this.camera.far = p.cameraFar;
+    this.camera.updateProjectionMatrix();
+
+    if (prev.shadows && !p.shadows) {
+      this.renderer.shadowMap.enabled = false;
+      this.lighting.setShadows(false, 0);
+      // Shadow-receiving shaders must recompile without the shadow chunks.
+      this.scene.traverse((o) => {
+        const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        if (!mat) return;
+        for (const m of Array.isArray(mat) ? mat : [mat]) m.needsUpdate = true;
+      });
+    }
+    this.terrain.setTier(p);
+    this.forest.setTier(p);
+    this.undergrowth.setTier(p);
+    this.canopy.setTier(p);
+    this.landmarks.setTier(p);
+    this.mist.setTier(p);
+    this.shafts.setTier(p);
+    this.particles.setTier(p);
+    this.wildlife.setTier(p);
+  }
+
+  // ---------------- picking ----------------
+  private proxyUnderPointer(): number | null {
+    if (Math.abs(this.pointer.x) > 1 || Math.abs(this.pointer.y) > 1) return null;
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const hits = this.raycaster.intersectObjects(this.landmarks.hitProxies, false);
+    const idx = hits[0]?.object.userData['stationIndex'];
+    return typeof idx === 'number' ? idx : null;
   }
 
   // ---------------- tick ----------------
@@ -389,9 +525,8 @@ export class ForestScene {
       this.currentProgress += (this.targetProgress - this.currentProgress) * (1 - Math.exp(-SCROLL_EASE * dt));
     }
 
-    // snap when idle — but only once we're already close to our intended
-    // target. Otherwise a long jump (e.g. mini-map click) gets short-circuited
-    // and snaps to whichever station the ease happens to be passing.
+    // Snap when idle, but only once already close to the intended target, so a
+    // long jump is not short-circuited by whichever station it passes.
     if (
       !this.travel && now - this.lastScrollAt > SNAP_IDLE_MS &&
       Math.abs(this.currentProgress - this.targetProgress) < SNAP_THRESHOLD
@@ -409,6 +544,8 @@ export class ForestScene {
     this.smoothedSpeed = THREE.MathUtils.lerp(this.smoothedSpeed, speed, 1 - Math.exp(-7 * dt));
     this.previousProgress = this.currentProgress;
     this.placeCameraAtProgress(this.currentProgress, dt);
+    this.camera.getWorldDirection(this.forward);
+    this.lighting.follow(this.camera.position, this.forward);
 
     // active zone
     let nearestIdx = 0;
@@ -428,23 +565,25 @@ export class ForestScene {
       this.settled = settled;
       this.onStationSettled?.(settled);
     }
-    if (this.motion) {
-      this.forest.update(dt);
-      this.godRays.update(dt);
-    }
+
+    // World systems. Reduced motion freezes the shared clock (all sway), mist
+    // drift, particles, wildlife and landmark animation; the mist still
+    // follows the camera so it never lags behind.
+    const camPos = this.camera.position;
+    const camU = this.currentProgress;
+    if (this.motion) this.clock.time.value += dt;
+    this.mist.update(dt, camPos, camU, this.fog.color, this.motion);
+    this.shafts.update(dt, camPos, camU, this.lighting.sun.color, this.motion);
+    // Pixels per unit of tan(angle); the portrait view offset renders a window
+    // of a frustum that is (1 + 2 * shift) times taller than the canvas.
+    const frustumScale = this.viewAspect < PORTRAIT_ASPECT ? 1 + 2 * PORTRAIT_SHIFT : 1;
+    const pxScale = (this.renderer.domElement.height * frustumScale) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
+    this.particles.update(dt, camPos, this.forward, pxScale, this.motion);
+    this.wildlife.update(dt, camPos, camU, this.motion);
     this.landmarks.update(dt, this.activeIndex, this.currentProgress, this.motion);
-    const carousel = settled ? this.landmarks.carouselState(this.activeIndex) : null;
-    const key = carousel ? `${this.activeIndex}:${carousel.index}:${carousel.count}` : '';
-    if (key !== this.lastCarousel) {
-      this.lastCarousel = key;
-      this.onCarouselChange?.(carousel);
-    }
 
     // hover detect
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.panelHits();
-    const hoverIdx = hits.length ? (hits[0].object.userData['stationIndex'] ?? null) : null;
-    const hover = typeof hoverIdx === 'number' ? hoverIdx : null;
+    const hover = this.proxyUnderPointer();
     if (hover !== this.lastHover) {
       this.lastHover = hover;
       this.onLandmarkHover?.(hover);
@@ -466,12 +605,8 @@ export class ForestScene {
   private onResize(): void {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    const aspect = w / Math.max(1, h);
     this.mobile = isMobileLayout();
-    this.camera.fov = this.fovForAspect(aspect);
-    this.camera.aspect = aspect;
-    this.camera.updateProjectionMatrix();
+    this.applyFraming(w, h);
     this.renderer.setSize(w, h, false);
-    this.applyViewportLayout();
   }
 }

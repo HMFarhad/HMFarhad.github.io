@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 
 /**
- * Async-load HDRI from /assets/forest/env. Sets scene.background AND
- * scene.environment (after PMREM). Falls back to a solid colour on error.
+ * Async-load the forest HDRI and use it ONLY as image-based lighting
+ * (`scene.environment`, low intensity). It is never the background: the sky is
+ * the fog colour, so there is no horizon line or blurry photo backdrop.
  *
- * The fallback in scene.background should already be set synchronously by
- * the caller before this is awaited so the canvas is never literally black.
+ * The caller skips this below the high tier, which also saves the 1.9 MB HDR
+ * download on phones.
  */
 export async function applyEnvironment(
   scene: THREE.Scene,
@@ -18,23 +19,22 @@ export async function applyEnvironment(
     const tex = await new HDRLoader().loadAsync(url);
     if (isDisposed()) { tex.dispose(); return null; }
     tex.mapping = THREE.EquirectangularReflectionMapping;
-    // Do NOT set tex.colorSpace — leave the loader default. Forcing it
-    // produces near-black output under ACES tone mapping.
-
+    // Do NOT set tex.colorSpace: leave the loader default (forcing it renders
+    // near-black under ACES tone mapping).
     const pmrem = new THREE.PMREMGenerator(renderer);
     pmrem.compileEquirectangularShader();
     const environment = pmrem.fromEquirectangular(tex);
-
-    scene.background  = tex;
-    scene.environment = environment.texture;
-    scene.backgroundIntensity = 0.85;
-    scene.environmentIntensity = 0.8;
-    scene.backgroundBlurriness = 0.04;
     pmrem.dispose();
-    return () => { tex.dispose(); environment.dispose(); };
+    tex.dispose();
+    if (isDisposed()) { environment.dispose(); return null; }
+    scene.environment = environment.texture;
+    scene.environmentIntensity = 0.35;
+    return () => {
+      if (scene.environment === environment.texture) scene.environment = null;
+      environment.dispose();
+    };
   } catch (err) {
-    console.warn('[environment] HDRI failed, using fallback colour', err);
-    if (!isDisposed()) scene.background = new THREE.Color(0x6a7468);
+    console.warn('[environment] HDRI failed; lighting without IBL', err);
     return null;
   }
 }

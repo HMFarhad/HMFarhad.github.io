@@ -1,0 +1,117 @@
+@let z = zone();
+<aside class="card" role="region" aria-labelledby="card-title" tabindex="-1" [style.transform]="sheetTransform()">
+  @if (mobile()) {
+    <div class="sheet-handle" aria-hidden="true"
+      (pointerdown)="onHandleDown($event)" (pointermove)="onHandleMove($event)"
+      (pointerup)="onHandleUp($event)" (pointercancel)="onHandleCancel()" (lostpointercapture)="onHandleCancel()">
+      <span></span>
+    </div>
+  }
+  <header class="card-head">
+    <p class="eyebrow">{{ stopLabel() }} <span aria-hidden="true">·</span> {{ z.title }}</p>
+    <h2 id="card-title" #title tabindex="-1">{{ z.title }}</h2>
+    @if (mobile()) {
+      <button type="button" class="sheet-expand" (click)="toggleSheet()" [attr.aria-expanded]="expanded()"
+        [attr.aria-label]="expanded() ? 'Collapse card' : 'Expand card'">
+        <span aria-hidden="true">{{ expanded() ? '⌄' : '⌃' }}</span>
+      </button>
+    }
+  </header>
+
+  <div class="card-body" #body tabindex="0" [attr.aria-label]="z.title + ' details'"
+    (pointerdown)="onBodyDown($event)" (pointerup)="onBodyUp($event)" (pointercancel)="onBodyCancel()">
+    @switch (z.id) {
+      @case ('about') {
+        <div class="page">
+          <h3 class="lead">{{ z.payload.name }}</h3>
+          <p class="accent">{{ z.payload.tagline }}</p>
+          @for (paragraph of z.payload.bio.split('\n\n'); track $index) { <p>{{ paragraph }}</p> }
+        </div>
+      }
+      @case ('skills') {
+        <div class="page">
+          @for (group of z.payload.groups; track group.name) {
+            <section class="group">
+              <h3 class="label">{{ group.name }}</h3>
+              <ul class="chips">@for (item of group.items; track item) { <li>{{ item }}</li> }</ul>
+            </section>
+          }
+        </div>
+      }
+      @case ('experience') {
+        @let job = z.payload.items[page()];
+        <article class="page turn">
+          <h3 class="lead">{{ job.role }}</h3>
+          <p class="accent">{{ job.company }} · {{ job.period }}</p>
+          <p>{{ job.blurb }}</p>
+          <p>{{ job.summary }}</p>
+          <h4 class="label">Key contributions</h4>
+          <ul class="bullets">@for (item of job.highlights; track item) { <li>{{ item }}</li> }</ul>
+          <h4 class="label">Challenge</h4><p>{{ job.challenge }}</p>
+          <h4 class="label">Resolution</h4><p>{{ job.resolution }}</p>
+          <ul class="chips">@for (t of job.tech; track t) { <li>{{ t }}</li> }</ul>
+        </article>
+      }
+      @case ('projects') {
+        @let project = z.payload.items[page()];
+        <article class="page turn">
+          @if (project.category) { <p class="label">{{ project.category }}</p> }
+          <h3 class="lead">{{ project.name }}</h3>
+          @if (project.imageUrl) { <img [src]="project.imageUrl" [alt]="project.name" loading="lazy" /> }
+          <p>{{ project.blurb }}</p>
+          <ul class="chips">@for (t of project.tech; track t) { <li>{{ t }}</li> }</ul>
+          @if (project.link) {
+            <a class="out" [href]="project.link" target="_blank" rel="noopener noreferrer">{{ project.linkLabel || 'Visit Site' }} <span aria-hidden="true">↗</span></a>
+          }
+        </article>
+      }
+      @case ('education') {
+        <div class="page">
+          @for (item of z.payload.items; track $index) {
+            <section class="entry">
+              <h3 class="lead small">{{ item.institution }}</h3>
+              <p class="accent">{{ item.degree }} · {{ item.period }}</p>
+              @if (item.details) { <p>{{ item.details }}</p> }
+            </section>
+          }
+        </div>
+      }
+      @case ('blogs') {
+        @let blog = z.payload.items[page()];
+        <article class="page turn">
+          <p class="label">{{ blog.date }}@if (blog.readTime) { · {{ blog.readTime }} }</p>
+          <h3 class="lead">{{ blog.title }}</h3>
+          <p>{{ blog.excerpt }}</p>
+          @if (blog.tags?.length) {
+            <ul class="chips">@for (t of blog.tags; track t) { <li>{{ t }}</li> }</ul>
+          }
+          <a class="out" [href]="blog.url" target="_blank" rel="noopener noreferrer">Read article <span aria-hidden="true">↗</span></a>
+        </article>
+      }
+      @case ('contact') {
+        <div class="page">
+          <p class="accent">The fire is lit. Say hello: email directly, send a note, or find me elsewhere.</p>
+        </div>
+      }
+    }
+    <ng-content select="[contact]" />
+  </div>
+
+  <footer class="card-foot">
+    @if (pageCount() > 1) {
+      <div class="card-pagination" role="group" [attr.aria-label]="z.title + ' pages'">
+        <button type="button" class="card-prev" (click)="step(-1)" [disabled]="page() === 0" aria-label="Previous page">
+          <span aria-hidden="true">←</span>
+        </button>
+        <span class="counter" aria-live="polite">{{ page() + 1 }} <span class="of">/ {{ pageCount() }}</span></span>
+        <button type="button" class="card-next" (click)="step(1)" [disabled]="page() === pageCount() - 1" aria-label="Next page">
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+    }
+    <button type="button" class="card-continue" (click)="continueTrail.emit()">
+      @if (isLast()) { Walk back to the start <span aria-hidden="true">↺</span> }
+      @else { Continue the trail <span aria-hidden="true">→</span> }
+    </button>
+  </footer>
+</aside>

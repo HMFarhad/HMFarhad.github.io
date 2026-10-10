@@ -15,7 +15,10 @@ const FILES = [
   { url: `${PH}/Textures/jpg/1k/mud_forest/mud_forest_arm_1k.jpg`,    out: 'ground/mud_forest_arm_1k.jpg' },
   // Bark (used by procedural tree trunks for a photoreal close-up)
   { url: `${PH}/Textures/jpg/1k/bark_brown_02/bark_brown_02_diff_1k.jpg`,   out: 'bark/bark_brown_02_diff_1k.jpg' },
-  { url: `${PH}/Textures/jpg/1k/bark_brown_02/bark_brown_02_nor_gl_1k.jpg`, out: 'bark/bark_brown_02_nor_gl_1k.jpg' }
+  { url: `${PH}/Textures/jpg/1k/bark_brown_02/bark_brown_02_nor_gl_1k.jpg`, out: 'bark/bark_brown_02_nor_gl_1k.jpg' },
+  // Leaf-litter forest floor (optional: the scene draws a procedural floor
+  // until/unless this file exists, so a failed download is only a warning).
+  { url: `${PH}/Textures/jpg/1k/forest_leaves_02/forest_leaves_02_diff_1k.jpg`, out: 'floor/forest_leaves_02_diff_1k.jpg', optional: true }
 ];
 
 async function exists(path) {
@@ -24,7 +27,6 @@ async function exists(path) {
 }
 
 async function downloadOne(url, outAbs) {
-  await mkdir(dirname(outAbs), { recursive: true });
   if (await exists(outAbs)) {
     console.log(`  skip (exists): ${outAbs}`);
     return;
@@ -35,6 +37,8 @@ async function downloadOne(url, outAbs) {
     throw new Error(`HTTP ${res.status} for ${url}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
+  // Create the folder only once there is something to put in it.
+  await mkdir(dirname(outAbs), { recursive: true });
   await writeFile(outAbs, buf);
   console.log(`  ok   ${(buf.length / 1024).toFixed(0)} KB → ${outAbs}`);
 }
@@ -46,6 +50,10 @@ async function downloadOne(url, outAbs) {
     try {
       await downloadOne(f.url, join(ROOT, f.out));
     } catch (err) {
+      if (f.optional) {
+        console.warn(`  SKIP (optional) ${f.url}\n        ${err.message}`);
+        continue;
+      }
       console.error(`  FAIL ${f.url}\n        ${err.message}`);
       failed++;
     }

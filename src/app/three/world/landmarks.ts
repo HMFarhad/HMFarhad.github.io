@@ -1,1684 +1,1007 @@
 import * as THREE from 'three';
-import type { Zone, SingleExperiencePayload, ProjectItem, BlogItem } from '../../core/content/zone.model';
-import { HOLO_FONT } from '../../core/holo-fonts';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { Zone, ZoneId } from '../../core/content/zone.model';
+import type { QualityProfile } from './quality';
+import type { Terrain } from './terrain';
+import type { LandmarkAnchor } from './landmark-plan';
+import { applyWindSway, makeCrossPlanes, type WorldClock } from './cards';
+import { makeFernRosette } from './undergrowth';
+import {
+  bambooLeafTexture, bambooTexture, fernTexture, flameFramesTexture, leafCanopyTexture,
+  mudFallbackTexture, softBlobTexture, stoneTexture, treeRingTexture, waterNormalTexture,
+} from './textures';
 
 /**
- * Optional override that switches a panel from rendering its whole zone
- * to rendering a single "sub-card" instead. Used by the Experience,
- * Projects and Blogs zones to project one screen per item along the trail.
+ * One natural landmark beside the trail at every station, built procedurally
+ * and keyed by zone id (never by position in the zone list):
+ *
+ *   about      ancient giant tree with buttress roots and a hanging lantern
+ *   skills     bamboo grove
+ *   experience huge fallen log with shelf fungi
+ *   projects   shallow stream with stepping stones
+ *   education  stack of mossy boulders
+ *   blogs      fairy ring of softly glowing mushrooms
+ *   contact    campfire ring with log seats
+ *
+ * The only things raycast are `hitProxies`: invisible spheres carrying
+ * `userData.stationIndex`. Each landmark has a soft light that brightens on
+ * approach; a small pool of point lights is handed to the nearest landmarks
+ * each frame so the number of lights (and so every shader) never changes.
  */
-type PanelContent =
-  | { kind: 'zone' }
-  | { kind: 'experience-item'; item: SingleExperiencePayload }
-  | { kind: 'project-item'; item: ProjectItem; image?: HTMLImageElement }
-  | { kind: 'blog-item'; item: BlogItem };
-
-/**
- * Each station is a futuristic, transparent holographic screen floating
- * in mid-air over the trail.
- *
- * Composition per station:
- *   - A faint cyan ground projector ring (just a glow disc).
- *   - A holographic "screen" plane: dark-glass backdrop + frame, plus a
- *     compositor canvas that animates a natural rainfall of 0/1 glyphs.
- *     Drops fall top-to-bottom at random speeds, sizes and x-positions.
- *     Where each drop passes a text pixel it "writes" or "washes" it,
- *     giving a build / dissolve effect.
- *   - A second additive-blended copy slightly behind for bloom/halo.
- *
- * State machine per station, driven by the active station index:
- *   - empty     : no text on the panel; light ambient rainfall plays.
- *   - building  : station is active and not fully written — rain heads
- *                 sweep down and reveal the text behind them.
- *   - built     : station is fully written; rain still falls lightly.
- *   - dissolving: walker has just left this station — rain washes the
- *                 text away from top to bottom; once gone, panel is
- *                 marked empty again, ready for a fresh rebuild.
- *
- * No solid frames, no pedestals, no support posts — the screen reads as
- * a holo-projection. All descendants carry `userData.stationIndex` so
- * the raycaster attributes hits to the right zone.
- */
-
 export interface StationLandmarksHandle {
-  group: THREE.Group;
-  /** Drive per-station rain. Call once per frame. */
+  readonly group: THREE.Group;
+  readonly hitProxies: THREE.Mesh[];
+  readonly anchors: readonly LandmarkAnchor[];
   update(dt: number, activeIdx: number, progress: number, motion: boolean): void;
-  carouselState(zoneIdx: number): { index: number; count: number } | null;
-  stepCarousel(zoneIdx: number, direction: number): boolean;
-  /**
-   * For carousel zones: consume scroll input to swipe between cards.
-   * Returns the unconsumed delta (>0 if the
-   * carousel is already at the last card and the walker should continue
-   * along the trail, <0 mirror-image at the first card, 0 otherwise).
-   * For any non-carousel zone this is a no-op and returns `delta` as-is.
-   */
-  nudgeCarousel(zoneIdx: number, delta: number): number;
-  /** True while the carousel for that zone is mid-slide. */
-  isCarouselAnimating(zoneIdx: number): boolean;
-  /**
-   * Hit-test the panel for that zone at canvas-space UVs (`u` in 0..1
-   * left→right, `v` in 0..1 bottom→top per three.js plane convention).
-   * Returns the URL of a clickable region if one sits under the point,
-   * otherwise null.
-   */
-  pickLink(zoneIdx: number, u: number, v: number): string | null;
-  /** Scale holo screens to fit the current canvas viewport. */
-  setViewport(w: number, h: number): void;
+  setTier(profile: QualityProfile): void;
+  dispose(): void;
 }
 
+interface LightSpec {
+  /** Moves with the landmark (e.g. the swaying lantern). */
+  anchor: THREE.Object3D;
+  colour: number;
+  intensity: number;
+  distance: number;
+  flicker?: (time: number) => number;
+}
+
+interface FrameState {
+  time: number;
+  dt: number;
+  /** 0 far away .. 1 parked at this station. */
+  approach: number;
+  /** Manual distance fade for fog-less additive effects. */
+  fade: number;
+  motion: boolean;
+}
+
+interface Built {
+  light: LightSpec;
+  proxy: { centre: THREE.Vector3; radius: number };
+  update?: (s: FrameState) => void;
+}
+
+interface Ctx {
+  anchor: LandmarkAnchor;
+  /** Positioned at the anchor, local +Z facing the trail. */
+  root: THREE.Group;
+  /** World-space group (identity transform). */
+  world: THREE.Group;
+  terrain: Terrain;
+  clock: WorldClock;
+  time: { value: number };
+  profile: QualityProfile;
+  camera: THREE.Camera;
+  bark: (params?: THREE.MeshStandardMaterialParameters) => THREE.MeshStandardMaterial;
+  solid: <T extends THREE.Mesh>(mesh: T) => T;
+  /** Terrain height at a local (x, z), relative to the anchor height. */
+  groundY: (lx: number, lz: number) => number;
+}
+
+type Builder = (ctx: Ctx) => Built;
+
+const BUILDERS: Record<ZoneId, Builder> = {
+  about: buildGiantTree,
+  skills: buildBambooGrove,
+  experience: buildFallenLog,
+  projects: buildStream,
+  education: buildBoulders,
+  blogs: buildMushroomRing,
+  contact: buildCampfire,
+};
+
 export function buildStationLandmarks(
-  zones: Zone[],
-  stationProgress: number[],
-  curve: THREE.CatmullRomCurve3
+  zones: readonly Zone[],
+  anchors: readonly LandmarkAnchor[],
+  stationProgress: readonly number[],
+  terrain: Terrain,
+  barkMat: THREE.MeshStandardMaterial,
+  clock: WorldClock,
+  profile: QualityProfile,
+  camera: THREE.Camera,
 ): StationLandmarksHandle {
-  const root = new THREE.Group();
-  // Each zone owns exactly one holo-screen state. Experience, Projects
-  // and Blogs use their state's carousel fields to swipe cards in place.
-  const states: (StationRevealState | null)[] = [];
+  const group = new THREE.Group();
+  group.name = 'landmarks';
+  const time = { value: 0 };
+  const barkVariants: THREE.MeshStandardMaterial[] = [];
+  const solids: THREE.Mesh[] = [];
+  const hitProxies: THREE.Mesh[] = [];
+  const stations: { built: Built; root: THREE.Group; centre: THREE.Vector3 }[] = [];
+  const proxyMat = new THREE.MeshBasicMaterial({ visible: false });
 
-  const VIEW_DELTA = 0.012;
+  zones.forEach((zone, i) => {
+    const anchor = anchors[i];
+    const root = new THREE.Group();
+    root.name = `landmark-${zone.id}`;
+    root.position.set(anchor.x, anchor.y, anchor.z);
+    root.rotation.y = anchor.facing;
+    root.updateMatrixWorld(true);
+    group.add(root);
+    const tmp = new THREE.Vector3();
+    const ctx: Ctx = {
+      anchor, root, world: group, terrain, clock, time, profile, camera,
+      bark: (params) => {
+        const m = new THREE.MeshStandardMaterial({
+          map: barkMat.map, normalMap: barkMat.normalMap,
+          roughness: 0.95, metalness: 0, vertexColors: true, ...params,
+        });
+        barkVariants.push(m);
+        return m;
+      },
+      solid: (mesh) => {
+        mesh.castShadow = profile.shadows;
+        mesh.receiveShadow = profile.shadows;
+        solids.push(mesh);
+        return mesh;
+      },
+      groundY: (lx, lz) => {
+        tmp.set(lx, 0, lz);
+        root.localToWorld(tmp);
+        return terrain.heightAt(tmp.x, tmp.z) - anchor.y;
+      },
+    };
+    const built = BUILDERS[zone.id](ctx);
+    root.updateMatrixWorld(true);
 
-  zones.forEach((zone, idx) => {
-    let zoneState: StationRevealState | null = null;
-    const register = (s: StationRevealState) => { zoneState = s; };
-
-    const t = stationProgress[idx] ?? idx / Math.max(1, zones.length - 1);
-
-    // Single screen placed just ahead of the camera at this t.
-    const p = curve.getPointAt(t);
-    const tAhead = t + VIEW_DELTA;
-    const station = makeHoloScreen(zone, register);
-    if (tAhead <= 1) {
-      const sp = curve.getPointAt(tAhead);
-      station.position.set(sp.x, 0, sp.z);
-      station.lookAt(p.x, station.position.y, p.z);
-    } else {
-      const tan = curve.getTangentAt(1).clone().normalize();
-      const reach = VIEW_DELTA * (curve.getLength());
-      station.position.set(p.x + tan.x * reach, 0, p.z + tan.z * reach);
-      station.lookAt(
-        station.position.x - tan.x,
-        station.position.y,
-        station.position.z - tan.z
-      );
-    }
-
-    station.traverse((o) => { o.userData['stationIndex'] = idx; });
-    root.add(station);
-    states.push(zoneState);
+    const proxy = new THREE.Mesh(new THREE.SphereGeometry(built.proxy.radius, 12, 8), proxyMat);
+    proxy.position.copy(root.localToWorld(built.proxy.centre.clone()));
+    proxy.userData['stationIndex'] = i;
+    proxy.name = `landmark-proxy-${zone.id}`;
+    group.add(proxy);
+    hitProxies.push(proxy);
+    stations.push({ built, root, centre: proxy.position.clone() });
   });
 
-  let lastActive = -1;
-  let elapsed = 0;
-  return {
-    group: root,
-    setViewport(w: number, h: number): void {
-      const scale = holoScreenScaleForViewport(w, h);
-      for (const child of root.children) {
-        child.scale.setScalar(scale);
-      }
-    },
-    update(dt: number, activeIdx: number, progress: number, motion: boolean): void {
-      if (motion) elapsed += dt;
-      // Fade the projection as the walker passes through its position.
-      // Keep the original ground projectors visible as route landmarks.
-      root.children.forEach((station, i) => {
-        const offset = progress - stationProgress[i];
-        const distance = Math.abs(offset);
-        const opacity = offset > 0
-          ? 1 - THREE.MathUtils.smoothstep(distance, 0.001, 0.009)
-          : 1 - THREE.MathUtils.smoothstep(distance, 0.003, 0.045);
-        const approach = 1 - THREE.MathUtils.smoothstep(distance, 0.006, 0.075);
-        const isActive = i === activeIdx;
-        station.children.forEach((child) => {
-          if (child.userData['arrivalLight']) {
-            (child as THREE.PointLight).intensity = approach * (isActive ? 1.7 : 0.22);
-            return;
-          }
-          if (child.userData['arrivalRing'] != null) {
-            const ring = child as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
-            const phase = motion ? (elapsed * 0.32 + child.userData['arrivalRing']) % 1 : 0.25;
-            ring.material.opacity = approach * (1 - phase) * (isActive ? 0.38 : 0.12);
-            ring.scale.setScalar(0.82 + phase * 1.05);
-            ring.visible = approach > 0.01;
-            return;
-          }
-          if (child.userData['projectionOpacity'] == null) return;
-          const pulse = isActive && motion ? 1 + Math.sin(elapsed * 1.8) * 0.025 : 1;
-          (child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>).material.opacity =
-            child.userData['projectionOpacity'] * opacity * pulse;
-          child.visible = opacity > 0.005;
-        });
-      });
-      // When the active station changes, push the OLD active panel into
-      // the dissolving phase (if it had any text built up).
-      if (activeIdx !== lastActive) {
-        const prev = lastActive >= 0 ? states[lastActive] : null;
-        if (prev && (prev.phase === 'building' || prev.phase === 'built')) {
-          prev.phase = 'dissolving';
-          prev.dissolveT = 0;
-          // Restart the front sweep from the top so the dissolve rains
-          // down from the top edge of the body region.
-          for (let c = 0; c < prev.cols; c++) prev.frontY[c] = 0;
-        }
-        // If the user comes BACK to a zone that's mid-dissolve or
-        // already empty, kick it into building from scratch. For the
-        // carousel zone, reset to the first item so the rebuild starts
-        // from the most recent job again.
-        const cur = activeIdx >= 0 ? states[activeIdx] : null;
-        if (cur && (cur.phase === 'dissolving' || cur.phase === 'empty')) {
-          cur.phase = 'building';
-          cur.buildT = 0;
-          for (let c = 0; c < cur.cols; c++) cur.frontY[c] = 0;
-          cur.revealMask.fill(0);
-          if (cur.contentCanvases) {
-            cur.subIndex = 0;
-            cur.subTarget = 0;
-            cur.slideT = 1;
-            cur.slideDir = 0;
-            cur.swipeAccum = 0;
-          }
-        }
-        lastActive = activeIdx;
-      }
+  // Pooled lights handed to the nearest landmarks.
+  const pool = Array.from({ length: Math.max(1, profile.landmarkLights) }, (_, k) => {
+    const l = new THREE.PointLight(0xffffff, 0, 12, 2);
+    l.name = `landmark-light-${k}`;
+    group.add(l);
+    return l;
+  });
+  const lightPos = stations.map(() => new THREE.Vector3());
+  const order = stations.map((_, i) => i);
+  const camDist = new Float32Array(stations.length);
+  const approachOf = new Float32Array(stations.length);
 
-      // Animate panels that are mid build / dissolve OR mid carousel-slide.
-      // Idle panels stay frozen to keep frames cheap.
-      for (let i = 0; i < states.length; i++) {
-        const s = states[i];
-        if (!s) continue;
-        const isActive = i === activeIdx;
-        const sliding = s.contentCanvases && (s.slideT! < 1 || s.subIndex !== s.subTarget);
-        if (s.phase !== 'building' && s.phase !== 'dissolving' && !sliding) continue;
-        if (!motion) {
-          s.phase = isActive ? 'built' : 'empty';
-          s.revealMask.fill(isActive ? 1 : 0);
-          s.drops.length = 0;
-          if (s.contentCanvases) {
-            s.subIndex = s.subTarget;
-            s.slideT = 1;
-          }
-          redrawStationPanel(s, isActive);
-          continue;
-        }
-        tickStationPanel(s, dt, isActive);
-      }
-    },
-    carouselState(zoneIdx: number) {
-      const s = states[zoneIdx];
-      return s?.contentCanvases ? { index: s.subTarget ?? 0, count: s.contentCanvases.length } : null;
-    },
-    stepCarousel(zoneIdx: number, direction: number) {
-      const s = states[zoneIdx];
-      if (!s?.contentCanvases || s.slideT! < 1) return false;
-      const target = THREE.MathUtils.clamp(s.subTarget! + direction, 0, s.contentCanvases.length - 1);
-      if (target === s.subTarget) return false;
-      s.subTarget = target;
-      s.slideDir = direction > 0 ? 1 : -1;
-      s.slideT = 0;
-      s.swipeAccum = 0;
-      return true;
-    },
-    nudgeCarousel(zoneIdx: number, delta: number): number {
-      const s = states[zoneIdx];
-      if (!s || !s.contentCanvases) return delta;
-      return advanceCarousel(s, delta);
-    },
-    isCarouselAnimating(zoneIdx: number): boolean {
-      const s = states[zoneIdx];
-      if (!s || !s.contentCanvases) return false;
-      return s.slideT! < 1 || s.subIndex !== s.subTarget;
-    },
-    pickLink(zoneIdx: number, u: number, v: number): string | null {
-      const s = states[zoneIdx];
-      if (!s || !s.links || s.phase !== 'built') return null;
-      // Don't activate links mid-swipe — the target card hasn't settled.
-      if (s.contentCanvases && s.subIndex !== s.subTarget) return null;
-      const idx = s.contentCanvases ? (s.subIndex ?? 0) : 0;
-      const rects = s.links[idx];
-      if (!rects || !rects.length) return null;
-      const px = u * s.W;
-      const py = (1 - v) * s.H;
-      for (const r of rects) {
-        if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) {
-          return r.url;
+  return {
+    group,
+    hitProxies,
+    anchors,
+    update(dt, activeIdx, progress, motion) {
+      if (motion) time.value += dt;
+      for (const m of barkVariants) {
+        if (m.map !== barkMat.map || m.normalMap !== barkMat.normalMap) {
+          m.map = barkMat.map;
+          m.normalMap = barkMat.normalMap;
+          m.needsUpdate = true;
         }
       }
-      return null;
+      const cam = camera.position;
+      stations.forEach((s, i) => {
+        const dP = Math.abs(progress - (stationProgress[i] ?? 0));
+        const approach = 1 - THREE.MathUtils.smoothstep(dP, 0.004, 0.06);
+        const dist = cam.distanceTo(s.centre);
+        approachOf[i] = approach;
+        s.built.update?.({
+          time: time.value, dt, approach, motion,
+          fade: 1 - THREE.MathUtils.smoothstep(dist, 30, 75),
+        });
+        s.built.light.anchor.getWorldPosition(lightPos[i]);
+        camDist[i] = cam.distanceTo(lightPos[i]);
+      });
+      order.sort((a, b) => camDist[a] - camDist[b]);
+      pool.forEach((light, k) => {
+        const i = order[k];
+        if (i === undefined) { light.intensity = 0; return; }
+        const spec = stations[i].built.light;
+        light.position.copy(lightPos[i]);
+        light.color.setHex(spec.colour);
+        light.distance = spec.distance;
+        const flicker = spec.flicker ? spec.flicker(time.value) : 1;
+        const far = 1 - THREE.MathUtils.smoothstep(camDist[i], 30, 60);
+        light.intensity = spec.intensity * (0.25 + 0.75 * approachOf[i]) * (i === activeIdx ? 1 : 0.7) * flicker * far;
+      });
+    },
+    setTier(p) {
+      for (const m of solids) { m.castShadow = p.shadows; m.receiveShadow = p.shadows; }
+    },
+    dispose() {
+      proxyMat.dispose();
     },
   };
 }
 
-/** Uniform scale for holo station groups so panels fit narrow/short viewports. */
-export function holoScreenScaleForViewport(w: number, h: number): number {
-  const aspect = w / Math.max(1, h);
-  const shortSide = Math.min(w, h);
-
-  // Portrait — the panel is much wider than the view frustum.
-  if (aspect < 0.85) {
-    return THREE.MathUtils.clamp(aspect * 1.05, 0.32, 0.76);
-  }
-  // Phone landscape or small-height windows.
-  if (shortSide < 520) {
-    return THREE.MathUtils.clamp(shortSide / 700, 0.66, 0.90);
-  }
-  // Nearly-square or slightly tall layouts (tablets).
-  if (aspect < 1.15) {
-    return THREE.MathUtils.clamp(0.76 + (aspect - 0.85) * 0.45, 0.76, 0.94);
-  }
-  return 1;
+// =================================================================== helpers
+function seeded(seed: number): () => number {
+  let s = (seed * 9301 + 49297) % 233280 || 1;
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
 }
 
-function makeHoloScreen(
-  zone: Zone,
-  registerState: (s: StationRevealState) => void,
-): THREE.Group {
-  const g = new THREE.Group();
-
-  // Expanded by 15% on left/right/bottom vs. the original 5.4 x 3.15
-  // panel, while the top edge stays anchored at its previous height.
-  // Original top edge: 2.4 + 3.15/2 = 3.975 world units.
-  const screenW = 5.4 * 1.30;          // +15% each side -> +30% width
-  const screenH = 3.15 * 1.15;         // +15% only on the bottom
-  const screenY = 3.975 - screenH / 2; // keep top edge fixed
-
-  // ---- ground projector: subtle cyan disc on the floor ----
-  const projTex = makeProjectorDiscTexture();
-  const proj = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.6, 2.6),
-    new THREE.MeshBasicMaterial({
-      map: projTex,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      color: 0x9ee6ff,
-      opacity: 0.55,
-    })
-  );
-  proj.rotation.x = -Math.PI / 2;
-  proj.position.y = 0.02;
-  g.add(proj);
-
-  // Expanding floor ripples and a localized light make arrival feel like
-  // the existing projector is powering up rather than spawning new UI.
-  for (const phase of [0, 0.5]) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.82, 0.86, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0x9ee6ff,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        opacity: 0,
-      })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.035;
-    ring.userData['arrivalRing'] = phase;
-    g.add(ring);
+/** Lumpy rock: smooth-shaded, displaced icosphere with box-projected UVs. */
+function makeRock(seed: number, detail = 2, rough = 0.22): THREE.BufferGeometry {
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const k = 1
+      + rough * Math.sin(x * 2.9 + seed) * Math.sin(y * 2.3 + seed * 1.3) * Math.sin(z * 3.1 + seed * 0.7)
+      + 0.07 * Math.sin(x * 7.1 + y * 5.3 + seed) + 0.04 * Math.sin(z * 9.7 - y * 6.1 + seed * 2);
+    const flat = y < -0.4 ? 0.75 : 1; // flatter underside sits on the ground
+    pos.setXYZ(i, x * k, y * k * flat, z * k);
+    uv[i * 2] = (x + z) * 0.6;
+    uv[i * 2 + 1] = y * 0.6;
   }
-
-  const arrivalLight = new THREE.PointLight(0x8ee8ff, 0, 9, 2);
-  arrivalLight.position.set(0, 1.8, 0.4);
-  arrivalLight.userData['arrivalLight'] = true;
-  g.add(arrivalLight);
-
-  // ---- thin "beam" rising from the projector to the screen base ----
-  // Simulated with a tall narrow additive plane (cheaper than a cone).
-  const beamTex = makeBeamTexture();
-  const beam = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.0, screenY - 0.05),
-    new THREE.MeshBasicMaterial({
-      map: beamTex,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      color: 0x9ee6ff,
-      opacity: 0.35,
-    })
-  );
-  beam.position.set(0, (screenY - 0.05) / 2 + 0.02, 0);
-  beam.userData['projectionOpacity'] = 0.25;
-  // Make the beam billboard-like by leaving it on the screen plane —
-  // it's mostly visible from the front anyway.
-  g.add(beam);
-
-  // ---- main holographic screen ----
-  // Use NormalBlending with a translucent dark-glass background baked
-  // into the canvas so text always has guaranteed contrast against the
-  // forest behind it. The glow plane behind it adds the holographic feel.
-  const state = createStationPanel(zone);
-  registerState(state);
-  const tex = state.tex;
-  const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(screenW, screenH),
-    new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      opacity: 1.0,
-      toneMapped: false,
-    })
-  );
-  screen.position.set(0, screenY, 0);
-  screen.userData['isPanel'] = true;
-  screen.userData['projectionOpacity'] = 1;
-  g.add(screen);
-
-  // ---- back glow halo: soft radial behind for bloom (no text ghost) ----
-  const glowTex = makeScreenHaloTexture();
-  const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(screenW * 1.25, screenH * 1.4),
-    new THREE.MeshBasicMaterial({
-      map: glowTex,
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-      color: 0x66e0ff,
-      opacity: 0.55,
-    })
-  );
-  glow.position.set(0, screenY, 0.05);
-  glow.userData['projectionOpacity'] = 0.25;
-  g.add(glow);
-
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.computeVertexNormals();
   return g;
 }
 
-// =================== textures ===================
-
-function makeProjectorDiscTexture(size = 256): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const cx = size / 2, cy = size / 2;
-  // Outer ring glow
-  const grad = ctx.createRadialGradient(cx, cy, size * 0.20, cx, cy, size * 0.5);
-  grad.addColorStop(0,    'rgba(150,230,255,0.0)');
-  grad.addColorStop(0.55, 'rgba(150,230,255,0.55)');
-  grad.addColorStop(0.78, 'rgba(110,210,255,0.35)');
-  grad.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  // Crisp ring
-  ctx.strokeStyle = 'rgba(180,240,255,0.85)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size * 0.42, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(180,240,255,0.35)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size * 0.30, 0, Math.PI * 2);
-  ctx.stroke();
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+/** Vertex colours: moss on upward-facing surfaces, `base` elsewhere. */
+function paintMoss(
+  g: THREE.BufferGeometry,
+  opts: { base?: THREE.Color; moss?: THREE.Color; threshold?: number; extra?: (p: THREE.Vector3, n: THREE.Vector3) => number },
+): THREE.BufferGeometry {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const nrm = g.getAttribute('normal') as THREE.BufferAttribute;
+  const base = opts.base ?? new THREE.Color(1, 1, 1);
+  const moss = opts.moss ?? new THREE.Color(0.42, 0.56, 0.27);
+  const th = opts.threshold ?? 0.35;
+  const col = new Float32Array(pos.count * 3);
+  const p = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    n.fromBufferAttribute(nrm, i);
+    const noise = 0.5 + 0.5 * Math.sin(p.x * 4.1 + p.z * 3.3) * Math.sin(p.y * 3.7 - p.x * 1.9);
+    let m = THREE.MathUtils.smoothstep(n.y + (noise - 0.5) * 0.5, th, th + 0.35);
+    if (opts.extra) m = Math.max(m, opts.extra(p, n));
+    c.copy(base).lerp(moss, THREE.MathUtils.clamp(m, 0, 1));
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
 }
 
-function makeBeamTexture(w = 64, h = 256): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  // Vertical gradient: bright at bottom, fade to top, plus center-vs-edge falloff.
-  const vert = ctx.createLinearGradient(0, h, 0, 0);
-  vert.addColorStop(0,   'rgba(170,235,255,0.55)');
-  vert.addColorStop(0.4, 'rgba(170,235,255,0.18)');
-  vert.addColorStop(1,   'rgba(170,235,255,0.0)');
-  ctx.fillStyle = vert;
-  ctx.fillRect(0, 0, w, h);
-  // Horizontal falloff
-  const horiz = ctx.createLinearGradient(0, 0, w, 0);
-  horiz.addColorStop(0,   'rgba(0,0,0,1)');
-  horiz.addColorStop(0.5, 'rgba(0,0,0,0)');
-  horiz.addColorStop(1,   'rgba(0,0,0,1)');
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.fillStyle = horiz;
-  ctx.fillRect(0, 0, w, h);
-  ctx.globalCompositeOperation = 'source-over';
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+function glowSprite(colour: number, size: number): THREE.Sprite {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: softBlobTexture(),
+    color: colour,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+    toneMapped: false,
+    opacity: 0,
+  }));
+  s.scale.setScalar(size);
+  s.renderOrder = 6;
+  return s;
 }
 
-function makeScreenHaloTexture(w = 256, h = 192): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  const cx = w / 2, cy = h / 2;
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) / 2);
-  grad.addColorStop(0,    'rgba(150,230,255,0.55)');
-  grad.addColorStop(0.45, 'rgba(110,210,255,0.25)');
-  grad.addColorStop(1,    'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+function leafCardMaterial(map: THREE.Texture, profile: QualityProfile, colour = 0xffffff): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    map, color: colour, alphaTest: 0.45, alphaToCoverage: profile.alphaToCoverage,
+    side: THREE.DoubleSide, roughness: 0.85, metalness: 0,
+  });
 }
 
-/**
- * Render the zone's content into a holographic-style canvas. The panel
- * is composed of two pre-rendered layers (a static frame + a transparent
- * content layer) blitted into a live canvas at runtime, so a matrix-rain
- * reveal can wipe the content into view column-by-column. With the dark-
- * glass backdrop in the frame layer the white-fill text reads crisply.
- */
-
-// ---------- rain animation tunables ----------
-const RAIN_GLYPHS = ['0', '1'];
-
-// Reveal grid: each panel is divided into cells. A per-column "front"
-// sweeps top-to-bottom while building, and the same front sweeps in the
-// other direction when dissolving. Smaller cells = smoother reveal but
-// more memory; these values give ~80×27 cells on the 1997×1030 panel.
-const CELL_W = 24;
-const CELL_H = 36;
-
-// Build/dissolve sweep speeds (px/sec). Each column gets a random speed
-// in this range so the wavefront looks irregular and "rain-like".
-const BUILD_SPEED_MIN     = 1100;
-const BUILD_SPEED_MAX     = 1550;
-const DISSOLVE_SPEED_MIN  = 1500;
-const DISSOLVE_SPEED_MAX  = 1950;
-
-// Drop population while a station is mid-reveal. Once the panel reaches
-// the `built` or `empty` phase, the drop pool is emptied and the panel
-// stops repainting entirely — no continuous ambient rain, no lag.
-const DROPS_ACTIVE  = 34;
-
-// Per-drop physics ranges.
-const DROP_VY_MIN   = 380;   // px / sec
-const DROP_VY_MAX   = 1100;
-const DROP_SIZE_MIN = 14;    // font px
-const DROP_SIZE_MAX = 26;
-const DROP_TAIL_MIN = 4;
-const DROP_TAIL_MAX = 9;
-const DROP_SHUFFLE  = 0.07;  // sec, glyph reroll interval
-
-// ---------- carousel tunables (Experience, Projects and Blogs) ----------
-/**
- * How much trail-progress one swipe consumes. The wheel handler in
- * ExperienceComponent divides deltaY by ~9000, so a single wheel notch
- * (~100) is ~0.011 progress units. With 0.018 per item, a deliberate
- * wheel gesture or touch swipe advances exactly one card.
- */
-const CAROUSEL_SWIPE_PROGRESS = 0.018;
-/** Slide-in animation duration, seconds. */
-const CAROUSEL_SLIDE_DURATION = 0.45;
-
-interface RainDrop {
-  x: number;       // px on the canvas
-  y: number;       // px on the canvas (drop head position)
-  vy: number;      // px/sec
-  size: number;    // font size in px
-  tail: number;    // tail length in chars
-  glyph: string;
-  shuffleAcc: number;
+function placeInstances(
+  im: THREE.InstancedMesh,
+  items: { pos: THREE.Vector3; quat?: THREE.Quaternion; scale: THREE.Vector3; colour?: THREE.Color }[],
+): void {
+  const m = new THREE.Matrix4();
+  const q0 = new THREE.Quaternion();
+  items.forEach((it, i) => {
+    m.compose(it.pos, it.quat ?? q0, it.scale);
+    im.setMatrixAt(i, m);
+    if (it.colour) im.setColorAt(i, it.colour);
+  });
+  im.instanceMatrix.needsUpdate = true;
+  if (im.instanceColor) im.instanceColor.needsUpdate = true;
 }
 
-type StationPhase = 'empty' | 'building' | 'built' | 'dissolving';
-
-interface StationRevealState {
-  W: number;
-  H: number;
-  bodyTop: number;
-  bodyBottom: number;
-  bodyLeft: number;
-  bodyRight: number;
-  cols: number;        // number of cell columns across the body region
-  rows: number;        // number of cell rows down the body region
-  /** revealMask[r * cols + c] in [0..1] — fraction of cell revealed */
-  revealMask: Float32Array;
-  /** per-column build/dissolve front (px from bodyTop). */
-  frontY: Float32Array;
-  /** per-column random speed multiplier (0.6 .. 1.0) */
-  colSpeed: Float32Array;
-
-  liveCanvas: HTMLCanvasElement;
-  liveCtx: CanvasRenderingContext2D;
-  frameCanvas: HTMLCanvasElement;
-  contentCanvas: HTMLCanvasElement;
-  drops: RainDrop[];
-  tex: THREE.CanvasTexture;
-
-  phase: StationPhase;
-  buildT: number;
-  dissolveT: number;
-
-  // ---- carousel (populated for Experience, Projects and Blogs) ----
-  /** One pre-rendered content canvas per experience item. */
-  contentCanvases?: HTMLCanvasElement[];
-  /** Index currently shown on the panel. */
-  subIndex?: number;
-  /** Index sliding in (== subIndex when no slide is in flight). */
-  subTarget?: number;
-  /** Slide animation progress, 0..1. 1 = settled. */
-  slideT?: number;
-  /** Direction of the in-flight slide: +1 forward, -1 back, 0 idle. */
-  slideDir?: 1 | -1 | 0;
-  /** Scroll accumulator (in trail-progress units) waiting to flip an item. */
-  swipeAccum?: number;
-  /**
-   * Clickable rectangles per content canvas, in canvas pixel coords.
-   * For non-carousel zones this is a single-element array at index 0.
-   */
-  links?: LinkRect[][];
+function addFerns(ctx: Ctx, parent: THREE.Object3D, spots: { x: number; y: number; z: number; s: number }[]): void {
+  if (!spots.length) return;
+  const mat = leafCardMaterial(fernTexture(), ctx.profile);
+  applyWindSway(mat, ctx.clock, { amp: 0.05, freq: 1.4, anchor: 'bottom', height: 0.55 });
+  const im = new THREE.InstancedMesh(makeFernRosette(), mat, spots.length);
+  const rnd = seeded(spots.length * 7 + 3);
+  placeInstances(im, spots.map((p) => ({
+    pos: new THREE.Vector3(p.x, p.y - 0.04, p.z),
+    quat: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI * 2),
+    scale: new THREE.Vector3(p.s, p.s, p.s),
+    colour: new THREE.Color().setHSL(0.22 + rnd() * 0.08, 0.4, 0.28 + rnd() * 0.12),
+  })));
+  parent.add(im);
 }
 
-interface LinkRect {
-  url: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+// ======================================================== about: giant tree
+function buildGiantTree(ctx: Ctx): Built {
+  const { root, profile } = ctx;
+  const rnd = seeded(11);
+  const trunkZ = -1.6;
+  const H = 24;
+  const trunkGeom = new THREE.CylinderGeometry(1.0, 1.7, H, 22, 18, true);
+  trunkGeom.translate(0, H / 2, 0);
+  const pos = trunkGeom.getAttribute('position') as THREE.BufferAttribute;
+  const uv = trunkGeom.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const a = Math.atan2(z, x);
+    let k = 1 + 0.09 * Math.sin(a * 5 + y * 0.25) + 0.05 * Math.sin(a * 11 - y * 0.6) + 0.03 * Math.sin(y * 1.7 + a * 3);
+    if (y < 3.5) k *= 1 + Math.pow((3.5 - y) / 3.5, 2) * 0.5;
+    pos.setX(i, x * k);
+    pos.setZ(i, z * k);
+    uv.setXY(i, uv.getX(i) * 3, uv.getY(i) * 2);
+  }
+  trunkGeom.computeVertexNormals();
+  paintMoss(trunkGeom, { threshold: 0.6, extra: (p) => THREE.MathUtils.clamp((5 - p.y) / 5, 0, 1) * (0.45 + 0.35 * Math.sin(Math.atan2(p.z, p.x) * 3 + p.y)) });
+  const bark = ctx.bark();
+  const trunk = ctx.solid(new THREE.Mesh(trunkGeom, bark));
+  trunk.position.set(0, -0.4, trunkZ);
+  root.add(trunk);
 
-function createStationPanel(zone: Zone): StationRevealState {
-  // Canvas scaled to match the expanded plane (1.30x wide, 1.15x tall)
-  // so text isn't stretched. Original was 1536 x 896.
-  const W = Math.round(1536 * 1.30); // 1997
-  const H = Math.round(896 * 1.15);  // 1030
-
-  // Filled in below after `state` is constructed so async image loads
-  // can repaint the live canvas. Captured by the project-image onload
-  // callbacks via closure.
-  let pendingRedraw: ((itemIdx: number) => void) | null = null;
-
-  const frameCanvas = document.createElement('canvas');
-  frameCanvas.width = W; frameCanvas.height = H;
-  drawFrameInto(frameCanvas.getContext('2d')!, W, H);
-
-  // For the Experience and Projects zones we pre-render one transparent
-  // content canvas per item and swipe between them on scroll. Every
-  // other zone just renders the zone payload once.
-  let contentCanvases: HTMLCanvasElement[] | undefined;
-  let contentCanvas: HTMLCanvasElement;
-  const links: LinkRect[][] = [];
-  if (zone.id === 'experience') {
-    contentCanvases = zone.payload.items.map((item) => {
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const lr: LinkRect[] = [];
-      drawContentInto(c.getContext('2d')!, zone, W, H, { kind: 'experience-item', item }, lr);
-      links.push(lr);
-      return c;
-    });
-    contentCanvas = contentCanvases[0];
-  } else if (zone.id === 'projects') {
-    contentCanvases = zone.payload.items.map((item, itemIdx) => {
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const lr: LinkRect[] = [];
-      drawContentInto(c.getContext('2d')!, zone, W, H, { kind: 'project-item', item }, lr);
-      links.push(lr);
-      // Kick off async image preload. When the image lands we re-render
-      // this specific card's content canvas with the artwork included
-      // and force a live-canvas repaint if it's the card on screen.
-      if (item.imageUrl) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const ctx2 = c.getContext('2d')!;
-          const lr2: LinkRect[] = [];
-          drawContentInto(ctx2, zone, W, H, { kind: 'project-item', item, image: img }, lr2);
-          links[itemIdx] = lr2;
-          if (pendingRedraw) pendingRedraw(itemIdx);
-        };
-        img.src = item.imageUrl;
-      }
-      return c;
-    });
-    contentCanvas = contentCanvases[0];
-  } else if (zone.id === 'blogs') {
-    contentCanvases = zone.payload.items.map((item) => {
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const lr: LinkRect[] = [];
-      drawContentInto(c.getContext('2d')!, zone, W, H, { kind: 'blog-item', item }, lr);
-      links.push(lr);
-      return c;
-    });
-    contentCanvas = contentCanvases[0];
-  } else {
-    contentCanvas = document.createElement('canvas');
-    contentCanvas.width = W; contentCanvas.height = H;
-    const lr: LinkRect[] = [];
-    drawContentInto(contentCanvas.getContext('2d')!, zone, W, H, { kind: 'zone' }, lr);
-    links.push(lr);
+  // Buttress roots.
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(2.6, 0);
+  shape.quadraticCurveTo(0.9, 0.35, 0, 2.9);
+  shape.lineTo(0, 0);
+  const finGeom = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.34, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1, curveSegments: 10,
+  });
+  finGeom.translate(1.05, 0, -0.17);
+  finGeom.computeVertexNormals();
+  paintMoss(finGeom, { threshold: 0.45, extra: (p) => 0.35 * THREE.MathUtils.clamp(1 - p.y / 2.5, 0, 1) });
+  for (let k = 0; k < 6; k++) {
+    const fin = ctx.solid(new THREE.Mesh(finGeom, bark));
+    const s = 0.8 + rnd() * 0.35;
+    fin.scale.set(s, 0.85 + rnd() * 0.3, 1);
+    fin.rotation.y = (k / 6) * Math.PI * 2 + (rnd() - 0.5) * 0.4;
+    fin.position.set(0, -0.35, trunkZ);
+    root.add(fin);
   }
 
-  const liveCanvas = document.createElement('canvas');
-  liveCanvas.width = W; liveCanvas.height = H;
-  const liveCtx = liveCanvas.getContext('2d')!;
-  liveCtx.drawImage(frameCanvas, 0, 0);
-
-  const tex = new THREE.CanvasTexture(liveCanvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-
-  // Body region (avoids the rounded outline + footer scroll cue).
-  const bodyTop = 20;
-  const bodyBottom = H - 84;
-  const bodyLeft = 32;
-  const bodyRight = W - 32;
-  const cols = Math.max(1, Math.floor((bodyRight - bodyLeft) / CELL_W));
-  // Use `ceil` so the bottom-most cell row fully covers the content area
-  // (the experience-card tech chips sit right at the bottom edge and were
-  // getting clipped when `floor` rounded the coverage down by a partial row).
-  const rows = Math.max(1, Math.ceil((bodyBottom - bodyTop) / CELL_H));
-
-  const revealMask = new Float32Array(cols * rows); // all zero — empty
-  const frontY = new Float32Array(cols);            // 0 = nothing built yet
-  const colSpeed = new Float32Array(cols);
-  for (let c = 0; c < cols; c++) {
-    colSpeed[c] = 0.6 + Math.random() * 0.4;
+  // Thick limbs and a broad crown.
+  const limbGeom = new THREE.CylinderGeometry(0.12, 0.3, 1, 8, 1, true);
+  limbGeom.translate(0, 0.5, 0);
+  const up = new THREE.Vector3(0, 1, 0);
+  const crownSpots: THREE.Vector3[] = [];
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2 + rnd();
+    const y = 10 + rnd() * 6;
+    const dir = new THREE.Vector3(Math.cos(a), 0.6 + rnd() * 0.5, Math.sin(a)).normalize();
+    const len = 5 + rnd() * 3;
+    const limb = ctx.solid(new THREE.Mesh(limbGeom, bark));
+    limb.position.set(0, y, trunkZ);
+    limb.quaternion.setFromUnitVectors(up, dir);
+    limb.scale.set(1.6, len, 1.6);
+    root.add(limb);
+    crownSpots.push(new THREE.Vector3(0, y, trunkZ).addScaledVector(dir, len));
   }
+  const crownMat = leafCardMaterial(leafCanopyTexture(), profile, 0xa9bb8f);
+  applyWindSway(crownMat, ctx.clock, { amp: 0.03, freq: 0.6, anchor: 'bottom' });
+  const crown = new THREE.InstancedMesh(makeCrossPlanes(2, 'bottom'), crownMat, 8);
+  crown.castShadow = profile.shadows;
+  placeInstances(crown, Array.from({ length: 8 }, (_, k) => {
+    const base = k < crownSpots.length ? crownSpots[k] : new THREE.Vector3((rnd() - 0.5) * 4, 19 + rnd() * 3, trunkZ + (rnd() - 0.5) * 4);
+    const r = 6 + rnd() * 2.5;
+    return {
+      pos: base.clone().add(new THREE.Vector3(0, -r * 0.3, 0)),
+      quat: new THREE.Quaternion().setFromAxisAngle(up, rnd() * Math.PI),
+      scale: new THREE.Vector3(r, r * 0.8, r),
+      colour: new THREE.Color().setHSL(0.24 + rnd() * 0.05, 0.4, 0.38 + rnd() * 0.1),
+    };
+  }));
+  root.add(crown);
 
-  // Drops are populated lazily by tickStationPanel when the station
-  // enters the building phase. Idle panels keep an empty drops array so
-  // they don't repaint at all.
-  const drops: RainDrop[] = [];
+  // Low limb reaching over toward the trail, with a lantern hanging from it.
+  const branchStart = new THREE.Vector3(0, 4.2, trunkZ + 1.0);
+  const branchDir = new THREE.Vector3(0.15, 0.22, 1).normalize();
+  const branchLen = 3.1;
+  const branch = ctx.solid(new THREE.Mesh(limbGeom, bark));
+  branch.position.copy(branchStart);
+  branch.quaternion.setFromUnitVectors(up, branchDir);
+  branch.scale.set(0.75, branchLen, 0.75);
+  root.add(branch);
+  const tip = branchStart.clone().addScaledVector(branchDir, branchLen - 0.2);
 
-  const state: StationRevealState = {
-    W, H, bodyTop, bodyBottom, bodyLeft, bodyRight,
-    cols, rows, revealMask, frontY, colSpeed,
-    liveCanvas, liveCtx, frameCanvas, contentCanvas,
-    drops, tex,
-    phase: 'empty',
-    buildT: 0,
-    dissolveT: 0,
-    contentCanvases,
-    subIndex:   contentCanvases ? 0 : undefined,
-    subTarget:  contentCanvases ? 0 : undefined,
-    slideT:     contentCanvases ? 1 : undefined,
-    slideDir:   contentCanvases ? 0 : undefined,
-    swipeAccum: contentCanvases ? 0 : undefined,
-    links,
-  };
+  const pivot = new THREE.Group();
+  pivot.position.copy(tip);
+  root.add(pivot);
+  const metal = new THREE.MeshStandardMaterial({ color: 0x2b2620, roughness: 0.6, metalness: 0.6 });
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.25, 4), new THREE.MeshStandardMaterial({ color: 0x6b5a40, roughness: 1 }));
+  rope.position.y = -0.62;
+  const body = new THREE.Group();
+  body.position.y = -1.45;
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0xffe2b0, emissive: 0xffb46b, emissiveIntensity: 2.2, roughness: 0.3, transparent: true, opacity: 0.92, depthWrite: false,
+  });
+  // Thin corner posts so the glowing glass stays visible from every side.
+  const frame = new THREE.Group();
+  const postGeom = new THREE.BoxGeometry(0.022, 0.4, 0.022);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    const post = new THREE.Mesh(postGeom, metal);
+    post.position.set(Math.cos(a) * 0.185, 0, Math.sin(a) * 0.185);
+    frame.add(post);
+  }
+  const pane = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.36, 6), glass);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.23, 0.18, 6), metal);
+  cap.position.y = 0.29;
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.04, 6), metal);
+  foot.position.y = -0.21;
+  const glow = glowSprite(0xffc27a, 1.8);
+  const lightAnchor = new THREE.Object3D();
+  body.add(frame, pane, cap, foot, glow, lightAnchor);
+  pivot.add(rope, body);
 
-  // Async project-image loads call back into this closure; if the card
-  // that just got its artwork is the one currently on screen and fully
-  // built, blit the refreshed content canvas through the reveal mask so
-  // the picture appears without waiting for a scroll/re-entry.
-  pendingRedraw = (itemIdx: number) => {
-    if (state.subIndex === itemIdx && state.phase === 'built') {
-      redrawStationPanel(state, true);
-    }
-  };
-
-  return state;
-}
-
-function spawnDrop(
-  bodyLeft: number, bodyRight: number,
-  bodyTop: number, bodyBottom: number,
-  initial: boolean,
-): RainDrop {
-  const size = DROP_SIZE_MIN + Math.random() * (DROP_SIZE_MAX - DROP_SIZE_MIN);
   return {
-    x: bodyLeft + Math.random() * (bodyRight - bodyLeft),
-    // On initial spawn, scatter drops across the panel so rain is already
-    // mid-fall; afterwards new drops spawn just above the panel.
-    y: initial
-      ? bodyTop + Math.random() * (bodyBottom - bodyTop)
-      : bodyTop - 20 - Math.random() * 200,
-    vy: DROP_VY_MIN + Math.random() * (DROP_VY_MAX - DROP_VY_MIN),
-    size,
-    tail: DROP_TAIL_MIN + ((Math.random() * (DROP_TAIL_MAX - DROP_TAIL_MIN)) | 0),
-    glyph: RAIN_GLYPHS[(Math.random() * RAIN_GLYPHS.length) | 0],
-    shuffleAcc: Math.random() * DROP_SHUFFLE,
+    light: {
+      anchor: lightAnchor, colour: 0xffb46b, intensity: 6, distance: 16,
+      flicker: (t) => 0.9 + 0.1 * Math.sin(t * 13) * Math.sin(t * 7.3),
+    },
+    proxy: { centre: new THREE.Vector3(0, 2.6, trunkZ + 0.6), radius: 3.4 },
+    update: (s) => {
+      pivot.rotation.z = Math.sin(s.time * 1.1) * 0.07;
+      pivot.rotation.x = Math.sin(s.time * 0.8 + 1) * 0.05;
+      const f = 0.9 + 0.1 * Math.sin(s.time * 13) * Math.sin(s.time * 7.3);
+      glass.emissiveIntensity = 2.2 * f;
+      glow.material.opacity = 0.5 * f * s.fade * (0.5 + 0.5 * s.approach);
+    },
   };
 }
 
-function tickStationPanel(s: StationRevealState, dt: number, isActive: boolean): void {
-  // 1) Advance per-column build / dissolve fronts.
-  const bodyH = s.bodyBottom - s.bodyTop;
-
-  if (s.phase === 'building') {
-    let allFull = true;
-    for (let c = 0; c < s.cols; c++) {
-      const v = BUILD_SPEED_MIN + (BUILD_SPEED_MAX - BUILD_SPEED_MIN) * s.colSpeed[c];
-      s.frontY[c] = Math.min(bodyH, s.frontY[c] + v * dt);
-      // Update reveal mask up to the front.
-      const rowsRevealed = Math.min(s.rows, Math.floor(s.frontY[c] / CELL_H));
-      for (let r = 0; r < rowsRevealed; r++) {
-        s.revealMask[r * s.cols + c] = 1;
-      }
-      // Partial cell at the wavefront.
-      if (rowsRevealed < s.rows) {
-        const remainder = (s.frontY[c] - rowsRevealed * CELL_H) / CELL_H;
-        s.revealMask[rowsRevealed * s.cols + c] = remainder;
-      }
-      if (s.frontY[c] < bodyH) allFull = false;
-    }
-    s.buildT += dt;
-    if (allFull) s.phase = 'built';
-  } else if (s.phase === 'dissolving') {
-    let allClear = true;
-    for (let c = 0; c < s.cols; c++) {
-      const v = DISSOLVE_SPEED_MIN + (DISSOLVE_SPEED_MAX - DISSOLVE_SPEED_MIN) * s.colSpeed[c];
-      // dissolve front travels DOWN from top, eating mask above it.
-      s.frontY[c] = Math.min(bodyH, s.frontY[c] + v * dt);
-      const rowsCleared = Math.min(s.rows, Math.floor(s.frontY[c] / CELL_H));
-      for (let r = 0; r < rowsCleared; r++) {
-        s.revealMask[r * s.cols + c] = 0;
-      }
-      if (rowsCleared < s.rows) {
-        const remainder = (s.frontY[c] - rowsCleared * CELL_H) / CELL_H;
-        // 1 - remainder of the front cell still has text.
-        s.revealMask[rowsCleared * s.cols + c] = 1 - remainder;
-      }
-      if (s.frontY[c] < bodyH) allClear = false;
-    }
-    s.dissolveT += dt;
-    if (allClear) {
-      s.phase = 'empty';
-      // Reset fronts so a future rebuild starts from zero again.
-      for (let c = 0; c < s.cols; c++) s.frontY[c] = 0;
-      s.revealMask.fill(0);
-    }
-  }
-
-  // 2) Advance drop physics. Drops only exist during build / dissolve;
-  //    when the panel finishes either phase we drop them entirely so the
-  //    canvas stops being re-blitted.
-  const stillAnimating = (s.phase === 'building' || s.phase === 'dissolving');
-  const targetDropCount = stillAnimating ? DROPS_ACTIVE : 0;
-  if (s.drops.length < targetDropCount) {
-    while (s.drops.length < targetDropCount) {
-      s.drops.push(spawnDrop(s.bodyLeft, s.bodyRight, s.bodyTop, s.bodyBottom, false));
-    }
-  } else if (s.drops.length > targetDropCount) {
-    s.drops.length = targetDropCount;
-  }
-
-  for (const d of s.drops) {
-    d.y += d.vy * dt;
-    d.shuffleAcc += dt;
-    if (d.shuffleAcc >= DROP_SHUFFLE) {
-      d.shuffleAcc = 0;
-      d.glyph = RAIN_GLYPHS[(Math.random() * RAIN_GLYPHS.length) | 0];
-    }
-    // Recycle drops that have fallen off the bottom.
-    if (d.y - d.tail * d.size * 1.05 > s.bodyBottom + 40) {
-      const fresh = spawnDrop(s.bodyLeft, s.bodyRight, s.bodyTop, s.bodyBottom, false);
-      d.x = fresh.x;
-      d.y = fresh.y;
-      d.vy = fresh.vy;
-      d.size = fresh.size;
-      d.tail = fresh.tail;
-      d.glyph = fresh.glyph;
-      d.shuffleAcc = 0;
-    }
-  }
-
-  // 3) Advance the carousel slide animation.
-  if (s.contentCanvases && s.slideT! < 1) {
-    s.slideT = Math.min(1, s.slideT! + dt / CAROUSEL_SLIDE_DURATION);
-    if (s.slideT >= 1) {
-      s.subIndex = s.subTarget!;
-      s.slideDir = 0;
-    }
-  }
-
-  // 4) Composite the panel: frame -> revealed text strips -> rain drops.
-  redrawStationPanel(s, isActive);
-}
-
-/**
- * Consume scroll input into the carousel. Returns the unconsumed delta:
- *   - 0 if the carousel could absorb everything
- *   - positive when the user has scrolled past the last item
- *   - negative when they've scrolled past the first item
- * `delta` is in trail-progress units (matching addScrollDelta callers).
- */
-function advanceCarousel(s: StationRevealState, delta: number): number {
-  if (!s.contentCanvases) return delta;
-  // Consume input while a card is still sliding. Without this guard,
-  // repeated wheel events can update subTarget several times and skip cards.
-  if (s.slideT! < 1 || s.subIndex !== s.subTarget) return 0;
-  const last = s.contentCanvases.length - 1;
-  s.swipeAccum = (s.swipeAccum ?? 0) + delta;
-
-  // Forward.
-  while (s.swipeAccum >= CAROUSEL_SWIPE_PROGRESS && s.subTarget! < last) {
-    s.swipeAccum -= CAROUSEL_SWIPE_PROGRESS;
-    s.subTarget = s.subTarget! + 1;
-    s.slideDir = 1;
-    s.slideT = 0;
-  }
-  // Backward.
-  while (s.swipeAccum <= -CAROUSEL_SWIPE_PROGRESS && s.subTarget! > 0) {
-    s.swipeAccum += CAROUSEL_SWIPE_PROGRESS;
-    s.subTarget = s.subTarget! - 1;
-    s.slideDir = -1;
-    s.slideT = 0;
-  }
-
-  // If we ran out of items, spill leftover scroll back to the caller so
-  // the walker can leave the station.
-  if (s.subTarget === last && s.swipeAccum > 0) {
-    const leftover = s.swipeAccum;
-    s.swipeAccum = 0;
-    return leftover;
-  }
-  if (s.subTarget === 0 && s.swipeAccum < 0) {
-    const leftover = s.swipeAccum;
-    s.swipeAccum = 0;
-    return leftover;
-  }
-  return 0;
-}
-
-function redrawStationPanel(s: StationRevealState, isActive: boolean): void {
-  const ctx = s.liveCtx;
-  const { W, H, bodyTop, bodyLeft, cols, rows, revealMask, frameCanvas } = s;
-
-  // The "content layer" for the reveal mask is the carousel's current
-  // card when the panel owns one, otherwise the static contentCanvas.
-  const activeContent: HTMLCanvasElement = s.contentCanvases
-    ? s.contentCanvases[s.subIndex!]
-    : s.contentCanvas;
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(frameCanvas, 0, 0);
-
-  // ---- carousel slide path: bypass the per-cell mask and skip drops ----
-  // While a swipe is in flight, render the outgoing and incoming card
-  // horizontally offset inside the screen body. The matrix-rain mask is
-  // only used for zone enter/exit, not for in-place item changes.
-  if (s.contentCanvases && (s.slideT! < 1 || s.subIndex !== s.subTarget)) {
-    const slideW = W - 32; // inner area inside the rounded outline
-    const t = s.slideT! * s.slideT! * (3 - 2 * s.slideT!);
-    const dir = s.slideDir! || 1;
-    const dx = -dir * t * slideW;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(16, 16, slideW, H - 32);
-    ctx.clip();
-    ctx.drawImage(s.contentCanvases[s.subIndex!], dx, 0);
-    ctx.drawImage(s.contentCanvases[s.subTarget!], dx + dir * slideW, 0);
-    ctx.restore();
-    s.tex.needsUpdate = true;
-    return;
-  }
-
-  // ---- blit revealed text cells ----
-  // Walk the mask cell-by-cell. For full cells we batch contiguous runs
-  // along the same row to reduce drawImage calls.
-  for (let r = 0; r < rows; r++) {
-    let runStart = -1;
-    for (let c = 0; c <= cols; c++) {
-      const m = c < cols ? revealMask[r * cols + c] : 0;
-      if (m >= 0.999) {
-        if (runStart < 0) runStart = c;
-      } else {
-        if (runStart >= 0) {
-          const sx = bodyLeft + runStart * CELL_W;
-          const sy = bodyTop + r * CELL_H;
-          const sw = (c - runStart) * CELL_W;
-          ctx.drawImage(activeContent, sx, sy, sw, CELL_H, sx, sy, sw, CELL_H);
-          runStart = -1;
-        }
-        // Partial cell — draw a fractional vertical slice (top portion
-        // for build, bottom portion for dissolve).
-        if (m > 0.001 && c < cols) {
-          const sx = bodyLeft + c * CELL_W;
-          const sy = bodyTop + r * CELL_H;
-          const sliceH = Math.max(1, m * CELL_H);
-          if (s.phase === 'building' || s.phase === 'built') {
-            ctx.drawImage(activeContent, sx, sy, CELL_W, sliceH, sx, sy, CELL_W, sliceH);
-          } else {
-            // dissolving: keep the BOTTOM portion of the cell (top is being eaten).
-            const yOff = CELL_H - sliceH;
-            ctx.drawImage(
-              activeContent,
-              sx, sy + yOff, CELL_W, sliceH,
-              sx, sy + yOff, CELL_W, sliceH,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  // ---- draw falling drops on top ----
-  ctx.textBaseline = 'top';
-  for (const d of s.drops) {
-    // Tail: each preceding glyph is offset upward by ~size*1.05 px.
-    const stride = d.size * 1.05;
-    ctx.font = `700 ${Math.round(d.size)}px "Consolas", "Menlo", "Courier New", monospace`;
-    for (let k = 0; k < d.tail; k++) {
-      const yy = d.y - k * stride;
-      if (yy + d.size < bodyTop - 80) break;
-      if (yy > s.bodyBottom + 40) continue;
-      const fade = 1 - k / d.tail;
-      let alpha: number;
-      let color: string;
-      if (k === 0) {
-        // Bright wet head.
-        alpha = isActive ? 0.95 * fade : 0.75 * fade;
-        color = `rgba(235, 255, 245, ${alpha})`;
-      } else {
-        // Trailing drips — cool cyan/green fading out.
-        alpha = (isActive ? 0.55 : 0.30) * fade;
-        color = `rgba(120, 220, 200, ${alpha})`;
-      }
-      ctx.fillStyle = color;
-      ctx.fillText(d.glyph, d.x, yy);
-    }
-  }
-
-  s.tex.needsUpdate = true;
-}
-
-/**
- * Paint the always-visible scaffolding: dark-glass backdrop, faint grid,
- * rounded outline, corner brackets, header underline, footer hairline +
- * "SCROLL ↓ TO CONTINUE" cue. NO zone text — that lives on the content
- * layer so it can be hidden until the rain reveal exposes it.
- */
-function drawFrameInto(ctx: CanvasRenderingContext2D, W: number, H: number): void {
-  ctx.clearRect(0, 0, W, H);
-
-  // ---- dark-glass backdrop for guaranteed text contrast ----
-  ctx.save();
-  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
-  ctx.clip();
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0,   'rgba(8, 23, 29, 0.95)');
-  bg.addColorStop(0.5, 'rgba(8, 22, 28, 0.93)');
-  bg.addColorStop(1,   'rgba(13, 30, 35, 0.90)');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-
-  // ---- subtle grid lines ----
-  ctx.save();
-  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
-  ctx.clip();
-  ctx.strokeStyle = 'rgba(140, 220, 255, 0.035)';
-  ctx.lineWidth = 1;
-  const cell = 64;
-  for (let x = 16; x < W - 16; x += cell) {
-    ctx.beginPath(); ctx.moveTo(x, 16); ctx.lineTo(x, H - 16); ctx.stroke();
-  }
-  for (let y = 16; y < H - 16; y += cell) {
-    ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
-  }
-  ctx.restore();
-
-  // ---- outer rounded outline ----
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(180, 240, 255, 0.35)';
-  drawRoundedRectPath(ctx, 16, 16, W - 32, H - 32, 22);
-  ctx.stroke();
-
-  // ---- corner brackets ----
-  drawCornerBrackets(ctx, 16, 16, W - 32, H - 32, 32, 'rgba(170, 231, 240, 0.8)', 3);
-
-  // ---- header underline ----
-  ctx.strokeStyle = 'rgba(180, 240, 255, 0.55)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(40, 110); ctx.lineTo(W - 40, 110);
-  ctx.stroke();
-
-  // ---- footer hairline + scroll cue ----
-  ctx.fillStyle = 'rgba(180, 240, 255, 0.45)';
-  ctx.fillRect(40, H - 80, W - 80, 1);
-  ctx.fillStyle = 'rgba(220, 235, 245, 0.95)';
-  ctx.font = '600 20px ' + HOLO_FONT;
-  ctx.textBaseline = 'alphabetic';
-  ctx.textAlign = 'right';
-  ctx.fillText('SCROLL / SWIPE TO EXPLORE', W - 64, H - 60);
-  ctx.textAlign = 'left';
-}
-
-/**
- * Paint the zone's text content (header title + body) onto a transparent
- * canvas. Uses a thin dark outline + near-white fill so text reads on the
- * dark-glass backdrop after it's blitted onto the live canvas.
- */
-function drawContentInto(
-  ctx: CanvasRenderingContext2D,
-  zone: Zone,
-  W: number,
-  H: number,
-  content: PanelContent,
-  links: LinkRect[],
-): void {
-  ctx.clearRect(0, 0, W, H);
-
-  // The glass supplies contrast, so retain each text style's intended colour.
-
-  // Header title. Carousel sub-panels (Experience / Projects) get a
-  // section-prefixed label so each screen is clearly part of the same
-  // section.
-  ctx.font = '800 40px ' + HOLO_FONT;
-  ctx.fillStyle = 'rgba(180, 225, 230, 0.9)';
-  ctx.textBaseline = 'middle';
-  let headerText: string;
-  if (content.kind === 'experience-item') {
-    headerText = '// EXPERIENCE · ' + content.item.company.toUpperCase();
-  } else if (content.kind === 'project-item') {
-    const cat = content.item.category ? ' · ' + content.item.category.toUpperCase() : '';
-    headerText = '// PROJECTS' + cat;
-  } else if (content.kind === 'blog-item') {
-    headerText = '// BLOG · ' + (content.item.date || '').toUpperCase();
-  } else {
-    headerText = '// ' + zone.title.toUpperCase();
-  }
-  ctx.fillText(headerText, 64, 75);
-  ctx.textBaseline = 'top';
-
-  const bodyX = 64;
-  let y = 180;
-  const accent  = 'rgba(120, 220, 255, 1.0)';
-  const primary = 'rgba(255, 235, 180, 1.0)';
-  const muted   = 'rgba(220, 235, 245, 1.0)';
-  const dim     = 'rgba(180, 205, 220, 1.0)';
-
-  const wrap = (txt: string, font: string, lineHeight: number, maxW: number) => {
-    ctx.font = font;
-    const lines = wrapText(ctx, txt, maxW);
-    for (const ln of lines) {
-      if (y > H - 56) return;
-      ctx.fillText(ln, bodyX, y);
-      y += lineHeight;
-    }
-  };
-
-  // Experience and Projects zones: each panel renders ONE card via a
-  // dedicated helper so the screens swiped through by the carousel all
-  // share an identical layout.
-  if (content.kind === 'experience-item') {
-    drawExperienceCard(ctx, content.item, W, H, bodyX, y, accent, primary, muted, dim);
-    return;
-  }
-  if (content.kind === 'project-item') {
-    drawProjectCard(ctx, content.item, W, H, bodyX, y, accent, primary, muted, dim, links, content.image);
-    return;
-  }
-  if (content.kind === 'blog-item') {
-    drawBlogCard(ctx, content.item, W, H, bodyX, y, accent, primary, muted, dim, links);
-    return;
-  }
-
-  switch (zone.id) {
-    case 'about': {
-      ctx.fillStyle = primary;
-      ctx.font = '700 80px ' + HOLO_FONT;
-      ctx.fillText(zone.payload.name, bodyX, y); y += 92;
-      ctx.fillStyle = accent;
-      wrap(zone.payload.tagline, '500 42px ' + HOLO_FONT, 52, W - bodyX - 80);
-      y += 30;
-      ctx.fillStyle = muted;
-      const paragraphs = zone.payload.bio.split(/\n\s*\n/);
-      for (let i = 0; i < paragraphs.length; i++) {
-        wrap(paragraphs[i], '400 40px ' + HOLO_FONT, 49, W - bodyX - 80);
-        if (i < paragraphs.length - 1) y += 22;
-      }
-      break;
-    }
-    case 'education': {
-      for (const it of zone.payload.items) {
-        if (it.institution.toLowerCase().startsWith('language')) y += 32;
-        ctx.fillStyle = primary;
-        ctx.font = '700 46px ' + HOLO_FONT;
-        ctx.fillText(it.institution, bodyX, y); y += 56;
-        ctx.fillStyle = accent;
-        const head = it.period ? `${it.degree} · ${it.period}` : it.degree;
-        wrap(head, '600 34px ' + HOLO_FONT, 44, W - bodyX - 80);
-        if (it.details) {
-          ctx.fillStyle = muted;
-          wrap(it.details, '400 32px ' + HOLO_FONT, 42, W - bodyX - 80);
-        }
-        y += 22;
-        if (y > H - 90) break;
-      }
-      break;
-    }
-    case 'skills': {
-      const groups = zone.payload.groups.slice(0, 6);
-      const cols = 3;
-      const colW = (W - bodyX - 80) / cols;
-      const rowTop0 = y;
-      const rowTop1 = y + (H - y - 90) / 2;
-      for (let i = 0; i < groups.length; i++) {
-        const grp = groups[i];
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const cx = bodyX + col * colW;
-        let cy = row === 0 ? rowTop0 : rowTop1;
-        ctx.fillStyle = primary;
-        ctx.font = '700 38px ' + HOLO_FONT;
-        ctx.fillText(grp.name, cx, cy); cy += 50;
-        ctx.fillStyle = muted;
-        ctx.font = '500 28px ' + HOLO_FONT;
-        for (const s of grp.items) {
-          if (cy > H - 80) break;
-          const lines = wrapText(ctx, '› ' + s, colW - 16);
-          for (const ln of lines) {
-            if (cy > H - 80) break;
-            ctx.fillText(ln, cx, cy); cy += 36;
-          }
-        }
-      }
-      break;
-    }
-    case 'experience': {
-      // The experience zone never renders through this switch — its three
-      // sub-screens are dispatched above via `content.kind === 'experience-item'`.
-      // The case exists only to keep the discriminated-union switch exhaustive.
-      break;
-    }
-    case 'projects': {
-      // The projects zone never renders through this switch — each item
-      // gets its own panel via `content.kind === 'project-item'` above.
-      // The case exists only to keep the discriminated-union switch exhaustive.
-      break;
-    }
-    case 'blogs': {
-      // The blogs zone never renders through this switch — each post
-      // gets its own panel via `content.kind === 'blog-item'` above.
-      // The case exists only to keep the discriminated-union switch exhaustive.
-      break;
-    }
-    case 'contact': {
-      ctx.fillStyle = primary;
-      ctx.font = '600 60px ' + HOLO_FONT;
-      ctx.fillText('Let’s grab a coffee ☕', bodyX, y); y += 80;
-      ctx.fillStyle = muted;
-      wrap(
-        'Working on a project together would be great — but even if you’re not, I’d still love to meet up, swap stories and grow the network. Reach out anytime.',
-        '400 40px ' + HOLO_FONT,
-        46,
-        W - bodyX - 80,
-      );
-      y += 18;
-      ctx.fillStyle = accent;
-      ctx.font = '600 38px ' + HOLO_FONT;
-      if (y < H - 110) {
-        ctx.fillText('Tap a link below ↓', bodyX, y);
-        y += 56;
-      }
-      break;
-    }
-  }
-}
-
-/**
- * Render a single job's experience card. Each experience sub-zone uses
- * the same layout: role + company header band, period chip, summary,
- * "Key Contributions" bullets, challenge / resolution callouts and a
- * row of tech stack chips along the bottom of the card body.
- */
-function drawExperienceCard(
-  ctx: CanvasRenderingContext2D,
-  p: SingleExperiencePayload,
-  W: number,
-  H: number,
-  bodyX: number,
-  startY: number,
-  accent: string,
-  primary: string,
-  muted: string,
-  dim: string,
-): void {
-  const maxW = W - bodyX - 80;
-  let y = startY;
-
-  const wrap = (txt: string, font: string, lineHeight: number, indent = 0) => {
-    ctx.font = font;
-    const lines = wrapText(ctx, txt, maxW - indent);
-    for (const ln of lines) {
-      if (y > H - 110) return;
-      ctx.fillText(ln, bodyX + indent, y);
-      y += lineHeight;
-    }
-  };
-
-  // Role.
-  ctx.fillStyle = primary;
-  ctx.font = '700 56px ' + HOLO_FONT;
-  ctx.fillText(p.role, bodyX, y);
-  y += 64;
-
-  // Company + period on a single accent line.
-  ctx.fillStyle = accent;
-  ctx.font = '600 32px ' + HOLO_FONT;
-  ctx.fillText(`${p.company}  ·  ${p.period}`, bodyX, y);
-  y += 46;
-
-  // Blurb (italic, dim) — the platform-level description.
-  ctx.fillStyle = dim;
-  wrap(p.blurb, 'italic 400 28px ' + HOLO_FONT, 36);
-  y += 14;
-
-  // Summary lead-in.
-  ctx.fillStyle = muted;
-  wrap(p.summary, '500 30px ' + HOLO_FONT, 38);
-  y += 18;
-
-  // Key contributions.
-  ctx.fillStyle = accent;
-  ctx.font = '700 28px ' + HOLO_FONT;
-  ctx.fillText('KEY CONTRIBUTIONS', bodyX, y);
-  y += 40;
-  ctx.fillStyle = muted;
-  for (const h of p.highlights) {
-    if (y > H - 220) break;
-    wrap('› ' + h, '400 26px ' + HOLO_FONT, 34, 18);
-  }
-  y += 14;
-
-  // Challenge / resolution call-outs.
-  if (y < H - 200) {
-    ctx.fillStyle = 'rgba(255, 180, 140, 1.0)';
-    ctx.font = '700 24px ' + HOLO_FONT;
-    ctx.fillText('CHALLENGE', bodyX, y);
-    y += 32;
-    ctx.fillStyle = muted;
-    wrap(p.challenge, '400 26px ' + HOLO_FONT, 34);
-    y += 8;
-  }
-  if (y < H - 140) {
-    ctx.fillStyle = 'rgba(150, 235, 180, 1.0)';
-    ctx.font = '700 24px ' + HOLO_FONT;
-    ctx.fillText('RESOLUTION', bodyX, y);
-    y += 32;
-    ctx.fillStyle = muted;
-    wrap(p.resolution, '400 26px ' + HOLO_FONT, 34);
-    y += 10;
-  }
-
-  // Tech chips — rendered as outlined pills along one or more rows,
-  // anchored near the bottom of the body region above the footer cue.
-  ctx.font = '600 22px ' + HOLO_FONT;
-  const chipPadX = 16;
-  const chipPadY = 8;
-  const chipGap = 10;
-  const chipH = 36;
-  // Measure widths.
-  const widths = p.tech.map((t) => ctx.measureText(t).width + chipPadX * 2);
-  // Pack into rows.
-  const rows: { items: string[]; widths: number[]; totalW: number }[] = [];
-  let row: { items: string[]; widths: number[]; totalW: number } = { items: [], widths: [], totalW: 0 };
-  for (let i = 0; i < p.tech.length; i++) {
-    const w = widths[i];
-    const add = w + (row.items.length ? chipGap : 0);
-    if (row.totalW + add > maxW && row.items.length) {
-      rows.push(row);
-      row = { items: [], widths: [], totalW: 0 };
-    }
-    row.items.push(p.tech[i]);
-    row.widths.push(w);
-    row.totalW += row.items.length === 1 ? w : add;
-  }
-  if (row.items.length) rows.push(row);
-
-  const totalChipsH = rows.length * chipH + (rows.length - 1) * chipGap;
-  let chipY = Math.max(y, H - 90 - totalChipsH);
-  for (const r of rows) {
-    let chipX = bodyX;
-    for (let i = 0; i < r.items.length; i++) {
-      const cw = r.widths[i];
-      // Pill background + border.
-      drawRoundedRectPath(ctx, chipX, chipY, cw, chipH, chipH / 2);
-      ctx.fillStyle = 'rgba(120, 220, 255, 0.10)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(180, 240, 255, 0.65)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      // Label (uses the outline-fill override).
-      ctx.fillStyle = accent;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(r.items[i], chipX + chipPadX, chipY + chipH / 2 + 1);
-      ctx.textBaseline = 'top';
-      chipX += cw + chipGap;
-    }
-    chipY += chipH + chipGap;
-  }
-}
-
-/**
- * Render a single project card. Layout mirrors `drawExperienceCard`:
- * category eyebrow, name, blurb, optional link callout, then tech-chip
- * pills anchored above the footer cue.
- */
-function drawProjectCard(
-  ctx: CanvasRenderingContext2D,
-  p: ProjectItem,
-  W: number,
-  H: number,
-  bodyX: number,
-  startY: number,
-  accent: string,
-  primary: string,
-  muted: string,
-  dim: string,
-  links: LinkRect[],
-  image?: HTMLImageElement,
-): void {
-  const maxW = W - bodyX - 80;
-  let y = startY;
-
-  // Project artwork banner: anchor a thumbnail on the right side of the
-  // card so the textual content (category / title / blurb) flows on the
-  // left like a magazine layout. Only drawn once the image has loaded.
-  let textMaxW = maxW;
-  if (image && image.complete && image.naturalWidth > 0) {
-    const imgW = Math.round(maxW * 0.40);
-    const ratio = image.naturalHeight / image.naturalWidth;
-    const imgH = Math.min(Math.round(imgW * ratio), 360);
-    const imgX = W - 80 - imgW;
-    const imgY = startY - 24;
-    // Subtle rounded frame for the thumbnail.
-    drawRoundedRectPath(ctx, imgX - 4, imgY - 4, imgW + 8, imgH + 8, 10);
-    ctx.fillStyle = 'rgba(10, 20, 36, 0.85)';
-    ctx.fill();
-    ctx.save();
-    drawRoundedRectPath(ctx, imgX, imgY, imgW, imgH, 8);
-    ctx.clip();
-    ctx.drawImage(image, imgX, imgY, imgW, imgH);
-    ctx.restore();
-    drawRoundedRectPath(ctx, imgX, imgY, imgW, imgH, 8);
-    ctx.strokeStyle = 'rgba(120, 220, 255, 0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    // Reserve the right column for the image — text wraps to a narrower
-    // width so it doesn't run under the artwork.
-    textMaxW = imgX - bodyX - 24;
-  }
-
-  const wrap = (txt: string, font: string, lineHeight: number, indent = 0) => {
-    ctx.font = font;
-    const lines = wrapText(ctx, txt, textMaxW - indent);
-    for (const ln of lines) {
-      if (y > H - 200) return;
-      ctx.fillText(ln, bodyX + indent, y);
-      y += lineHeight;
-    }
-  };
-
-  // Category eyebrow.
-  if (p.category) {
-    ctx.fillStyle = accent;
-    ctx.font = '700 22px ' + HOLO_FONT;
-    ctx.fillText(p.category.toUpperCase(), bodyX, y);
-    y += 32;
-  }
-
-  // Project name (allow wrap for long titles).
-  ctx.fillStyle = primary;
-  wrap(p.name, '700 48px ' + HOLO_FONT, 58);
-  y += 8;
-
-  // Blurb body.
-  ctx.fillStyle = muted;
-  wrap(p.blurb, '400 28px ' + HOLO_FONT, 36);
-  y += 14;
-
-  // Link callout (Visit Site / GitHub / View Paper).
-  if (p.link) {
-    const label = (p.linkLabel ?? 'Visit Site') + '  \u2197';
-    ctx.font = '700 24px ' + HOLO_FONT;
-    const linkPadX = 18;
-    const linkH = 40;
-    const linkW = ctx.measureText(label).width + linkPadX * 2;
-    if (y < H - 220) {
-      drawRoundedRectPath(ctx, bodyX, y, linkW, linkH, linkH / 2);
-      ctx.fillStyle = 'rgba(255, 220, 140, 0.18)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 230, 170, 0.75)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255, 235, 180, 1.0)';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, bodyX + linkPadX, y + linkH / 2 + 1);
-      ctx.textBaseline = 'top';
-      // Register the pill as a clickable hit-region. Pad the rect a few
-      // pixels so taps near the edge still register on the holo plane.
-      links.push({
-        url: p.link,
-        x: bodyX - 6,
-        y: y - 6,
-        w: linkW + 12,
-        h: linkH + 12,
+// ======================================================= skills: bamboo
+function buildBambooGrove(ctx: Ctx): Built {
+  const { root, profile } = ctx;
+  const rnd = seeded(23);
+  const culmGeom = new THREE.CylinderGeometry(0.045, 0.055, 1, 7, 1, true);
+  culmGeom.translate(0, 0.5, 0);
+  const culmMat = new THREE.MeshStandardMaterial({ map: bambooTexture(), roughness: 0.55, metalness: 0 });
+  applyWindSway(culmMat, ctx.clock, { amp: 0.022, freq: 0.9, anchor: 'bottom' });
+  const clumps = [new THREE.Vector2(-1.7, -1.3), new THREE.Vector2(1.0, -1.9), new THREE.Vector2(0.1, -0.2)];
+  const N = 48;
+  const culms = new THREE.InstancedMesh(culmGeom, culmMat, N);
+  const tufts: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3; colour: THREE.Color }[] = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const items = Array.from({ length: N }, (_, k) => {
+    const c = clumps[k % clumps.length];
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 1.25;
+    const x = c.x + Math.cos(a) * r;
+    const z = Math.min(1.0, c.y + Math.sin(a) * r);
+    const h = 6 + rnd() * 5;
+    const lean = 0.03 + rnd() * 0.09;
+    const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(a) * lean, 0, -Math.cos(a) * lean));
+    const thick = 0.9 + rnd() * 0.5;
+    const pos = new THREE.Vector3(x, ctx.groundY(x, z) - 0.1, z);
+    const axis = up.clone().applyQuaternion(quat);
+    for (const f of [0.74, 0.93]) {
+      const s = 1.5 + rnd() * 0.9;
+      tufts.push({
+        pos: pos.clone().addScaledVector(axis, h * f),
+        quat: new THREE.Quaternion().setFromAxisAngle(up, rnd() * Math.PI),
+        scale: new THREE.Vector3(s, s * 0.9, s),
+        colour: new THREE.Color().setHSL(0.2 + rnd() * 0.05, 0.4, 0.4 + rnd() * 0.12),
       });
-      y += linkH + 12;
     }
-  }
+    return { pos, quat, scale: new THREE.Vector3(thick, h, thick), colour: new THREE.Color().setHSL(0.2 + rnd() * 0.04, 0.3, 0.55 + rnd() * 0.2) };
+  });
+  placeInstances(culms, items);
+  ctx.solid(culms);
+  root.add(culms);
 
-  // Tech chips along the bottom.
-  ctx.font = '600 22px ' + HOLO_FONT;
-  const chipPadX = 16;
-  const chipGap = 10;
-  const chipH = 36;
-  const widths = p.tech.map((t) => ctx.measureText(t).width + chipPadX * 2);
+  const leafMat = leafCardMaterial(bambooLeafTexture(), profile);
+  applyWindSway(leafMat, ctx.clock, { amp: 0.09, freq: 0.9, anchor: 'uniform' });
+  const leaves = new THREE.InstancedMesh(makeCrossPlanes(2, 'center'), leafMat, tufts.length);
+  placeInstances(leaves, tufts);
+  leaves.castShadow = profile.shadows;
+  root.add(leaves);
 
-  const rows: { items: string[]; widths: number[]; totalW: number }[] = [];
-  let row: { items: string[]; widths: number[]; totalW: number } = { items: [], widths: [], totalW: 0 };
-  for (let i = 0; i < p.tech.length; i++) {
-    const w = widths[i];
-    const add = w + (row.items.length ? chipGap : 0);
-    if (row.totalW + add > maxW && row.items.length) {
-      rows.push(row);
-      row = { items: [], widths: [], totalW: 0 };
-    }
-    row.items.push(p.tech[i]);
-    row.widths.push(w);
-    row.totalW += row.items.length === 1 ? w : add;
-  }
-  if (row.items.length) rows.push(row);
-
-  const totalChipsH = rows.length * chipH + (rows.length - 1) * chipGap;
-  let chipY = Math.max(y, H - 90 - totalChipsH);
-  // Reference `dim` so the helper signature stays in lockstep with
-  // drawExperienceCard and ESLint doesn't flag an unused parameter.
-  void dim;
-  for (const r of rows) {
-    let chipX = bodyX;
-    for (let i = 0; i < r.items.length; i++) {
-      const cw = r.widths[i];
-      drawRoundedRectPath(ctx, chipX, chipY, cw, chipH, chipH / 2);
-      ctx.fillStyle = 'rgba(120, 220, 255, 0.10)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(180, 240, 255, 0.65)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = accent;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(r.items[i], chipX + chipPadX, chipY + chipH / 2 + 1);
-      ctx.textBaseline = 'top';
-      chipX += cw + chipGap;
-    }
-    chipY += chipH + chipGap;
-  }
-}
-
-/**
- * Render a single blog post card: date / read-time eyebrow, post title,
- * excerpt body, "Read on Medium" pill, and optional tag chips. The pill
- * is registered with the link collector so a tap on the holo-screen
- * opens the Medium URL.
- */
-function drawBlogCard(
-  ctx: CanvasRenderingContext2D,
-  b: BlogItem,
-  W: number,
-  H: number,
-  bodyX: number,
-  startY: number,
-  accent: string,
-  primary: string,
-  muted: string,
-  dim: string,
-  links: LinkRect[],
-): void {
-  const maxW = W - bodyX - 80;
-  let y = startY;
-  void dim;
-
-  const wrap = (txt: string, font: string, lineHeight: number, limit: number) => {
-    ctx.font = font;
-    const lines = wrapText(ctx, txt, maxW);
-    for (let i = 0; i < lines.length && i < limit; i++) {
-      if (y > H - 200) return;
-      ctx.fillText(lines[i], bodyX, y);
-      y += lineHeight;
-    }
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(0, 2.2, 0.6);
+  root.add(lightAnchor);
+  return {
+    light: { anchor: lightAnchor, colour: 0xe2f0d2, intensity: 3, distance: 12 },
+    proxy: { centre: new THREE.Vector3(-0.2, 2.4, -1.1), radius: 3.2 },
   };
+}
 
-  // Eyebrow: published date \u00b7 read time.
-  ctx.fillStyle = accent;
-  ctx.font = '700 22px ' + HOLO_FONT;
-  const eyebrow = b.readTime ? `${b.date}  \u00b7  ${b.readTime}` : b.date;
-  ctx.fillText(eyebrow, bodyX, y);
-  y += 34;
+// ================================================= experience: fallen log
+function buildFallenLog(ctx: Ctx): Built {
+  const { root } = ctx;
+  const rnd = seeded(37);
+  const L = 9;
+  const logGroup = new THREE.Group();
+  logGroup.position.set(0, ctx.groundY(0, -0.8) + 0.55, -0.8);
+  logGroup.rotation.y = 0.12;
+  root.add(logGroup);
 
-  // Title.
-  ctx.fillStyle = primary;
-  wrap(b.title, '700 44px ' + HOLO_FONT, 54, 3);
-  y += 10;
+  const geom = new THREE.CylinderGeometry(0.62, 0.78, L, 18, 12, false);
+  const pos = geom.getAttribute('position') as THREE.BufferAttribute;
+  const uv = geom.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = 1 + 0.06 * Math.sin(a * 6 + y * 0.8) + 0.04 * Math.sin(y * 2.3 + a * 2);
+    pos.setX(i, x * k);
+    pos.setZ(i, z * k);
+    uv.setXY(i, uv.getX(i) * 1.5, uv.getY(i));
+  }
+  geom.rotateZ(Math.PI / 2);
+  geom.computeVertexNormals();
+  paintMoss(geom, { threshold: 0.3 });
+  const ends = new THREE.MeshStandardMaterial({ map: treeRingTexture(), roughness: 0.9 });
+  const log = ctx.solid(new THREE.Mesh(geom, [ctx.bark(), ends, ends]));
+  logGroup.add(log);
 
-  // Excerpt.
-  ctx.fillStyle = muted;
-  wrap(b.excerpt, '400 28px ' + HOLO_FONT, 36, 10);
-  y += 18;
-
-  // "Read on Medium" pill \u2014 hit-region registered for click handling.
-  if (b.url) {
-    const label = 'Read on Medium  \u2197';
-    ctx.font = '700 24px ' + HOLO_FONT;
-    const linkPadX = 18;
-    const linkH = 42;
-    const linkW = ctx.measureText(label).width + linkPadX * 2;
-    if (y < H - 160) {
-      drawRoundedRectPath(ctx, bodyX, y, linkW, linkH, linkH / 2);
-      ctx.fillStyle = 'rgba(255, 220, 140, 0.18)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 230, 170, 0.75)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255, 235, 180, 1.0)';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, bodyX + linkPadX, y + linkH / 2 + 1);
-      ctx.textBaseline = 'top';
-      links.push({
-        url: b.url,
-        x: bodyX - 6,
-        y: y - 6,
-        w: linkW + 12,
-        h: linkH + 12,
-      });
-      y += linkH + 16;
-    }
+  // Root plate at the thick end (+x).
+  let plateGeom: THREE.BufferGeometry = new THREE.SphereGeometry(1, 16, 12);
+  plateGeom.deleteAttribute('normal');
+  plateGeom = mergeVertices(plateGeom);
+  const pp = plateGeom.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < pp.count; i++) {
+    const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i);
+    const k = 1 + 0.18 * Math.sin(y * 5 + z * 3) * Math.sin(z * 4 - y * 2);
+    pp.setXYZ(i, x * 0.4, y * 1.75 * k, z * 1.85 * k);
+  }
+  plateGeom.computeVertexNormals();
+  const soil = new THREE.MeshStandardMaterial({ map: mudFallbackTexture(), color: 0xb19a7a, roughness: 1 });
+  const plate = ctx.solid(new THREE.Mesh(plateGeom, soil));
+  plate.position.set(L / 2 + 0.2, 0.55, 0);
+  logGroup.add(plate);
+  const rootGeom = new THREE.CylinderGeometry(0.03, 0.08, 1, 5, 1, true);
+  rootGeom.translate(0, 0.5, 0);
+  const rootMat = ctx.bark({ vertexColors: false, color: 0x6a5642 });
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2 + rnd() * 0.5;
+    const r = new THREE.Mesh(rootGeom, rootMat);
+    r.position.set(L / 2 + 0.3, 0.55 + Math.sin(a) * 1.25, Math.cos(a) * 1.35);
+    // Roots curl back toward the log rather than spiking outward.
+    const dir = new THREE.Vector3(0.55 + rnd() * 0.4, Math.sin(a) * 0.6, Math.cos(a) * 0.6).normalize();
+    r.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    r.scale.set(0.8, 0.45 + rnd() * 0.5, 0.8);
+    logGroup.add(r);
   }
 
-  // Tag chips along the bottom.
-  if (b.tags && b.tags.length) {
-    ctx.font = '600 22px ' + HOLO_FONT;
-    const chipPadX = 16;
-    const chipGap = 10;
-    const chipH = 34;
-    const widths = b.tags.map((t) => ctx.measureText(t).width + chipPadX * 2);
+  // Shelf fungi on the trail-facing flank.
+  const fungusGeom = new THREE.CylinderGeometry(1, 1, 0.14, 16, 1, false, 0, Math.PI);
+  fungusGeom.rotateY(-Math.PI / 2);
+  const fungi = new THREE.InstancedMesh(fungusGeom, new THREE.MeshStandardMaterial({ roughness: 0.75 }), 10);
+  const fungusCols = [0xe2d3ae, 0xcdb88a, 0xd9a865, 0xeadfc4];
+  const fungusItems = Array.from({ length: 10 }, (_, k) => {
+    const x = -3.6 + (k / 9) * 7 + (rnd() - 0.5) * 0.4;
+    const r = THREE.MathUtils.lerp(0.62, 0.78, (x + L / 2) / L);
+    const phi = -0.3 + rnd() * 0.85 + (k % 3 === 1 ? 0.25 : 0);
+    const s = 0.14 + rnd() * 0.16;
+    return {
+      pos: new THREE.Vector3(x, r * Math.sin(phi), r * Math.cos(phi) - 0.04),
+      scale: new THREE.Vector3(s, 0.6 + rnd() * 0.5, s * 0.9),
+      colour: new THREE.Color(fungusCols[k % fungusCols.length]),
+    };
+  });
+  placeInstances(fungi, fungusItems);
+  ctx.solid(fungi);
+  logGroup.add(fungi);
 
-    const rows: { items: string[]; widths: number[]; totalW: number }[] = [];
-    let row: { items: string[]; widths: number[]; totalW: number } = { items: [], widths: [], totalW: 0 };
-    for (let i = 0; i < b.tags.length; i++) {
-      const w = widths[i];
-      const add = w + (row.items.length ? chipGap : 0);
-      if (row.totalW + add > maxW && row.items.length) {
-        rows.push(row);
-        row = { items: [], widths: [], totalW: 0 };
+  addFerns(ctx, root, [
+    { x: -3.2, y: ctx.groundY(-3.2, -2.2), z: -2.2, s: 1.1 },
+    { x: 2.4, y: ctx.groundY(2.4, -2.3), z: -2.3, s: 1.0 },
+    { x: -4.8, y: ctx.groundY(-4.8, 0.2), z: 0.2, s: 0.8 },
+  ]);
+
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(0, 2.2, 0.9);
+  root.add(lightAnchor);
+  return {
+    light: { anchor: lightAnchor, colour: 0xffe6c4, intensity: 3.5, distance: 12 },
+    proxy: { centre: new THREE.Vector3(0, 1.0, -0.8), radius: 3.6 },
+  };
+}
+
+// ==================================================== projects: stream
+function buildStream(ctx: Ctx): Built {
+  const { root, world, terrain, anchor } = ctx;
+  const rnd = seeded(41);
+  const pts = (anchor.stream ?? []).map((p) => new THREE.Vector3(p.x, 0, p.z));
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(0, 2.5, 0.5);
+  root.add(lightAnchor);
+  if (pts.length < 2) {
+    return { light: { anchor: lightAnchor, colour: 0xd6ecff, intensity: 2.5, distance: 12 }, proxy: { centre: new THREE.Vector3(0, 0.8, 0), radius: 3.2 } };
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  const S = 80;
+  const samples = curve.getSpacedPoints(S);
+  const across = [0, 0.2, 0.5, 0.8, 1];
+  const edgeAlpha = [0, 0.85, 1, 0.85, 0];
+  const positions: number[] = [];
+  const colours: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const tan = new THREE.Vector3();
+  let arc = 0;
+  const waterY: number[] = [];
+  for (let i = 0; i <= S; i++) {
+    const c = samples[i];
+    const f = i / S;
+    curve.getTangentAt(f, tan);
+    const nx = -tan.z, nz = tan.x;
+    const taper = THREE.MathUtils.smoothstep(f, 0, 0.1) * (1 - THREE.MathUtils.smoothstep(f, 0.9, 1));
+    const halfW = 1.3 * (0.35 + 0.65 * taper);
+    const y = terrain.heightAt(c.x, c.z) + 0.16;
+    waterY.push(y);
+    if (i > 0) arc += c.distanceTo(samples[i - 1]);
+    across.forEach((v, k) => {
+      const o = (v - 0.5) * 2 * halfW;
+      positions.push(c.x + nx * o, y, c.z + nz * o);
+      colours.push(1, 1, 1, edgeAlpha[k] * taper);
+      uvs.push(arc / 2.5, v);
+    });
+  }
+  const row = across.length;
+  for (let i = 0; i < S; i++) {
+    for (let k = 0; k < row - 1; k++) {
+      const a = i * row + k, b = a + 1, c = a + row, d = c + 1;
+      // Counter-clockwise seen from above (normal +Y; the front face is up).
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+  const waterGeom = new THREE.BufferGeometry();
+  waterGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  waterGeom.setAttribute('color', new THREE.Float32BufferAttribute(colours, 4));
+  waterGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  waterGeom.setIndex(indices);
+  waterGeom.computeVertexNormals();
+  const ripple = waterNormalTexture();
+  ripple.repeat.set(1, 1);
+  const water = new THREE.Mesh(waterGeom, new THREE.MeshStandardMaterial({
+    color: 0x56706c,
+    // A faint pale sheen stands in for sky reflection on tiers without IBL.
+    emissive: 0x9fb3b4,
+    emissiveIntensity: 0.22,
+    roughness: 0.1,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.9,
+    vertexColors: true,
+    normalMap: ripple,
+    normalScale: new THREE.Vector2(0.45, 0.45),
+    depthWrite: false,
+    envMapIntensity: 1.4,
+  }));
+  water.renderOrder = 1;
+  water.name = 'stream-water';
+  world.add(water);
+
+  // Stepping stones across the middle, and a few rocks along the banks.
+  const mid = Math.round(S / 2);
+  const c = samples[mid];
+  curve.getTangentAt(mid / S, tan);
+  const nx = -tan.z, nz = tan.x;
+  const stoneMat = new THREE.MeshStandardMaterial({ map: stoneTexture(), vertexColors: true, roughness: 0.9 });
+  const stoneGeom = paintMoss(makeRock(5, 1, 0.18), { threshold: 0.7, moss: new THREE.Color(0.5, 0.6, 0.35) });
+  const stoneItems: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 }[] = [];
+  for (let k = 0; k < 5; k++) {
+    const o = -1.55 + k * 0.78;
+    const x = c.x + nx * o + tan.x * (rnd() - 0.5) * 0.35;
+    const z = c.z + nz * o + tan.z * (rnd() - 0.5) * 0.35;
+    stoneItems.push({
+      pos: new THREE.Vector3(x, Math.max(waterY[mid], terrain.heightAt(x, z)) + 0.02, z),
+      quat: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI),
+      scale: new THREE.Vector3(0.32 + rnd() * 0.08, 0.16 + rnd() * 0.05, 0.27 + rnd() * 0.06),
+    });
+  }
+  for (let k = 0; k < 7; k++) {
+    const i = Math.floor(8 + rnd() * (S - 16));
+    curve.getTangentAt(i / S, tan);
+    const side = rnd() < 0.5 ? -1 : 1;
+    const o = side * (1.35 + rnd() * 0.5);
+    const x = samples[i].x - tan.z * o, z = samples[i].z + tan.x * o;
+    const s = 0.2 + rnd() * 0.35;
+    stoneItems.push({
+      pos: new THREE.Vector3(x, terrain.heightAt(x, z) + s * 0.25, z),
+      quat: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI),
+      scale: new THREE.Vector3(s, s * 0.6, s * 0.9),
+    });
+  }
+  const stones = new THREE.InstancedMesh(stoneGeom, stoneMat, stoneItems.length);
+  placeInstances(stones, stoneItems);
+  ctx.solid(stones);
+  world.add(stones);
+
+  // Ferns on the banks.
+  const fernSpots: { x: number; y: number; z: number; s: number }[] = [];
+  for (let k = 0; k < 12; k++) {
+    const i = Math.floor(4 + rnd() * (S - 8));
+    curve.getTangentAt(i / S, tan);
+    const side = rnd() < 0.5 ? -1 : 1;
+    const o = side * (2.1 + rnd() * 1.2);
+    const x = samples[i].x - tan.z * o, z = samples[i].z + tan.x * o;
+    // Never on the trail side within the path.
+    const toTrail = Math.hypot(x - anchor.x, z - anchor.z);
+    if (toTrail > 12) continue;
+    fernSpots.push({ x, y: terrain.heightAt(x, z), z, s: 0.8 + rnd() * 0.5 });
+  }
+  addFerns(ctx, world, fernSpots);
+
+  return {
+    light: { anchor: lightAnchor, colour: 0xd6ecff, intensity: 2.5, distance: 12 },
+    proxy: { centre: new THREE.Vector3(0, 0.8, 0), radius: 3.2 },
+    update: (s) => {
+      ripple.offset.x = -s.time * 0.16;
+      ripple.offset.y = Math.sin(s.time * 0.3) * 0.05;
+    },
+  };
+}
+
+// ================================================= education: boulders
+function buildBoulders(ctx: Ctx): Built {
+  const { root } = ctx;
+  const rnd = seeded(53);
+  const mat = new THREE.MeshStandardMaterial({ map: stoneTexture(), vertexColors: true, roughness: 0.95, metalness: 0 });
+  const stack: [number, number, number, number, number, number][] = [
+    [0, 0.55, -0.6, 1.5, 1.1, 1.35],
+    [1.75, 0.35, -1.3, 1.1, 0.85, 1.0],
+    [-1.6, 0.4, -1.1, 1.2, 0.9, 1.1],
+    [0.35, 1.75, -0.85, 0.95, 0.75, 0.9],
+    [-0.7, 1.35, -1.55, 0.8, 0.65, 0.8],
+    [0.15, 2.55, -0.95, 0.55, 0.45, 0.5],
+  ];
+  stack.forEach(([x, y, z, sx, sy, sz], k) => {
+    const g = paintMoss(makeRock(k * 3.7 + 1, 3, 0.2), { threshold: 0.25 });
+    const m = ctx.solid(new THREE.Mesh(g, mat));
+    m.position.set(x, ctx.groundY(x, z) + y - 0.15, z);
+    m.scale.set(sx, sy, sz);
+    m.rotation.y = rnd() * Math.PI * 2;
+    root.add(m);
+  });
+  // Small scattered rocks.
+  const small = new THREE.InstancedMesh(paintMoss(makeRock(99, 1, 0.2), { threshold: 0.4 }), mat, 6);
+  placeInstances(small, Array.from({ length: 6 }, () => {
+    const a = rnd() * Math.PI * 2, r = 2.6 + rnd() * 1.2;
+    const x = Math.cos(a) * r, z = Math.min(1.2, -0.8 + Math.sin(a) * r);
+    const s = 0.18 + rnd() * 0.25;
+    return { pos: new THREE.Vector3(x, ctx.groundY(x, z) + s * 0.2, z), scale: new THREE.Vector3(s, s * 0.7, s) };
+  }));
+  ctx.solid(small);
+  root.add(small);
+  addFerns(ctx, root, [
+    { x: 2.6, y: ctx.groundY(2.6, -0.2), z: -0.2, s: 1.0 },
+    { x: -2.7, y: ctx.groundY(-2.7, -0.1), z: -0.1, s: 1.2 },
+    { x: 0.9, y: ctx.groundY(0.9, -2.8), z: -2.8, s: 0.9 },
+  ]);
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(0.8, 2.3, 0.9);
+  root.add(lightAnchor);
+  return {
+    light: { anchor: lightAnchor, colour: 0xe6eef8, intensity: 2.5, distance: 11 },
+    proxy: { centre: new THREE.Vector3(0, 1.4, -0.9), radius: 2.8 },
+  };
+}
+
+// ================================================ blogs: mushroom ring
+function buildMushroomRing(ctx: Ctx): Built {
+  const { root } = ctx;
+  const rnd = seeded(67);
+  const centre = new THREE.Vector3(0, 0, -0.6);
+  const spots: { x: number; z: number; h: number; r: number }[] = [];
+  for (let k = 0; k < 14; k++) {
+    const a = (k / 14) * Math.PI * 2 + (rnd() - 0.5) * 0.2;
+    const rr = 2.4 + (rnd() - 0.5) * 0.35;
+    spots.push({ x: centre.x + Math.cos(a) * rr, z: centre.z + Math.sin(a) * rr, h: 0.16 + rnd() * 0.2, r: 0.1 + rnd() * 0.09 });
+    if (rnd() < 0.5) {
+      spots.push({ x: centre.x + Math.cos(a + 0.08) * (rr + 0.18), z: centre.z + Math.sin(a + 0.08) * (rr + 0.18), h: 0.09 + rnd() * 0.08, r: 0.05 + rnd() * 0.04 });
+    }
+  }
+  const stemGeom = new THREE.CylinderGeometry(0.035, 0.05, 1, 7);
+  stemGeom.translate(0, 0.5, 0);
+  const stems = new THREE.InstancedMesh(stemGeom, new THREE.MeshStandardMaterial({
+    color: 0xe8e4d6, emissive: 0x2f5a4c, emissiveIntensity: 0.6, roughness: 0.7,
+  }), spots.length);
+  const capMat = new THREE.MeshStandardMaterial({ color: 0xdfe8d6, emissive: 0x7fe0c0, emissiveIntensity: 1.2, roughness: 0.55 });
+  capMat.onBeforeCompile = (shader) => {
+    shader.uniforms['uLTime'] = ctx.time;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+uniform float uLTime;
+varying float vPulse;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+#ifdef USE_INSTANCING
+  vec2 pulseOrigin = vec2(instanceMatrix[3].x, instanceMatrix[3].z);
+#else
+  vec2 pulseOrigin = vec2(modelMatrix[3].x, modelMatrix[3].z);
+#endif
+vPulse = 0.55 + 0.45 * sin(uLTime * 1.4 + dot(pulseOrigin, vec2(3.1, 2.3)));`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying float vPulse;`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+totalEmissiveRadiance *= vPulse;`);
+  };
+  capMat.customProgramCacheKey = () => 'mushroom-pulse-v1';
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2), capMat, spots.length);
+  const capCols = [0xdfe8d6, 0xe9e2c8, 0xd2e6dc];
+  placeInstances(stems, spots.map((s) => ({
+    pos: new THREE.Vector3(s.x, ctx.groundY(s.x, s.z) - 0.02, s.z),
+    scale: new THREE.Vector3(s.r * 6, s.h, s.r * 6),
+  })));
+  placeInstances(caps, spots.map((s, k) => ({
+    pos: new THREE.Vector3(s.x, ctx.groundY(s.x, s.z) - 0.03 + s.h, s.z),
+    quat: new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3)),
+    scale: new THREE.Vector3(s.r, s.r * 0.6, s.r),
+    colour: new THREE.Color(capCols[k % capCols.length]),
+  })));
+  root.add(stems, caps);
+
+  const glow = glowSprite(0x8fe8cc, 6);
+  glow.position.set(centre.x, ctx.groundY(centre.x, centre.z) + 0.4, centre.z);
+  root.add(glow);
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(centre.x, 0.6, centre.z);
+  root.add(lightAnchor);
+  const pulse = (t: number) => 0.75 + 0.25 * Math.sin(t * 1.4);
+  return {
+    light: { anchor: lightAnchor, colour: 0x8fe8cc, intensity: 4, distance: 10, flicker: pulse },
+    proxy: { centre: new THREE.Vector3(centre.x, 0.6, centre.z), radius: 2.9 },
+    update: (s) => {
+      glow.material.opacity = 0.16 * pulse(s.time) * s.fade * (0.4 + 0.6 * s.approach);
+    },
+  };
+}
+
+// ================================================== contact: campfire
+function buildCampfire(ctx: Ctx): Built {
+  const { root } = ctx;
+  const rnd = seeded(79);
+  const cz = -0.4;
+  const g0 = ctx.groundY(0, cz);
+  const fire = new THREE.Group();
+  fire.position.set(0, g0, cz);
+  root.add(fire);
+
+  const stoneMat = new THREE.MeshStandardMaterial({ map: stoneTexture(), color: 0xb9b6ad, roughness: 0.95 });
+  const ring = new THREE.InstancedMesh(makeRock(13, 1, 0.2), stoneMat, 11);
+  placeInstances(ring, Array.from({ length: 11 }, (_, k) => {
+    const a = (k / 11) * Math.PI * 2;
+    const s = 0.2 + rnd() * 0.08;
+    return {
+      pos: new THREE.Vector3(Math.cos(a) * 0.74, s * 0.35, Math.sin(a) * 0.74),
+      quat: new THREE.Quaternion().setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rnd() * Math.PI),
+      scale: new THREE.Vector3(s * 1.2, s * 0.8, s),
+    };
+  }));
+  ctx.solid(ring);
+  const ash = new THREE.Mesh(new THREE.CircleGeometry(0.64, 20).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({
+    color: 0x2b2622, emissive: 0x3a1204, emissiveIntensity: 0.6, roughness: 1,
+  }));
+  ash.position.y = 0.03;
+  fire.add(ring, ash);
+
+  // Teepee of sticks.
+  const stickGeom = new THREE.CylinderGeometry(0.045, 0.06, 1, 6);
+  stickGeom.translate(0, 0.5, 0);
+  const charred = new THREE.MeshStandardMaterial({ color: 0x3b2f25, roughness: 1, emissive: 0x5a1e05, emissiveIntensity: 0.5 });
+  const apex = new THREE.Vector3(0, 0.82, 0);
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2 + rnd() * 0.3;
+    const base = new THREE.Vector3(Math.cos(a) * 0.42, 0.02, Math.sin(a) * 0.42);
+    const dir = apex.clone().sub(base);
+    const len = dir.length() * 1.08;
+    const stick = new THREE.Mesh(stickGeom, charred);
+    stick.position.copy(base);
+    stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    stick.scale.set(1, len, 1);
+    fire.add(stick);
+  }
+
+  // Log seats, leaving the trail-facing side open.
+  const ends = new THREE.MeshStandardMaterial({ map: treeRingTexture(), roughness: 0.9 });
+  const seatGeom = new THREE.CylinderGeometry(0.24, 0.26, 1.7, 14, 1, false);
+  const sp = seatGeom.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < sp.count; i++) sp.setX(i, sp.getX(i) * 1.5);
+  seatGeom.rotateZ(Math.PI / 2);
+  paintMoss(seatGeom, { threshold: 0.75 });
+  const seatBark = ctx.bark();
+  for (const deg of [112, 180, 248]) {
+    const th = THREE.MathUtils.degToRad(deg);
+    const x = Math.sin(th) * 2.1, z = cz + Math.cos(th) * 2.1;
+    const seat = ctx.solid(new THREE.Mesh(seatGeom, [seatBark, ends, ends]));
+    seat.position.set(x, ctx.groundY(x, z) + 0.2, z);
+    seat.rotation.y = th + (rnd() - 0.5) * 0.2;
+    root.add(seat);
+  }
+
+  // Flames: two crossed flipbook cards, additive, fog-less, faded by hand.
+  const flameGeom = makeCrossPlanes(2, 'bottom');
+  const flames = [0, 1].map((k) => {
+    const tex = flameFramesTexture().clone();
+    tex.needsUpdate = true;
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide, fog: false, toneMapped: false, opacity: 0,
+    });
+    const mesh = new THREE.Mesh(flameGeom, mat);
+    mesh.position.y = 0.08;
+    mesh.rotation.y = k * Math.PI / 4;
+    mesh.scale.set(k ? 0.7 : 0.95, k ? 1.0 : 1.35, k ? 0.7 : 0.95);
+    mesh.renderOrder = 7;
+    fire.add(mesh);
+    return { mesh, tex, mat, phase: k * 2 };
+  });
+  const glow = glowSprite(0xffa45c, 3.2);
+  glow.position.y = 0.6;
+  fire.add(glow);
+
+  // Rising embers.
+  const EMBERS = 40;
+  const seeds = new Float32Array(EMBERS * 3);
+  for (let i = 0; i < seeds.length; i++) seeds[i] = rnd();
+  const emberGeom = new THREE.BufferGeometry();
+  emberGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(EMBERS * 3), 3));
+  emberGeom.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 3));
+  const emberMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: ctx.time, uFade: { value: 0 } },
+    vertexShader: EMBER_VERT,
+    fragmentShader: EMBER_FRAG,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+  const embers = new THREE.Points(emberGeom, emberMat);
+  embers.frustumCulled = false;
+  embers.renderOrder = 8;
+  embers.position.y = 0.3;
+  fire.add(embers);
+
+  const lightAnchor = new THREE.Object3D();
+  lightAnchor.position.set(0, 0.75, 0);
+  fire.add(lightAnchor);
+  const flicker = (t: number) => 0.82 + 0.18 * (Math.sin(t * 17) * 0.5 + Math.sin(t * 9.7 + 1) * 0.3 + Math.sin(t * 23.3) * 0.2);
+  return {
+    light: { anchor: lightAnchor, colour: 0xff9a4a, intensity: 10, distance: 14, flicker },
+    proxy: { centre: new THREE.Vector3(0, 0.8, cz), radius: 2.6 },
+    update: (s) => {
+      const f = flicker(s.time);
+      for (const fl of flames) {
+        const frame = Math.floor(s.time * 11 + fl.phase) % 4;
+        fl.tex.offset.x = frame / 4;
+        fl.mat.opacity = s.fade * (0.8 + 0.2 * f);
       }
-      row.items.push(b.tags[i]);
-      row.widths.push(w);
-      row.totalW += row.items.length === 1 ? w : add;
-    }
-    if (row.items.length) rows.push(row);
-
-    const totalChipsH = rows.length * chipH + (rows.length - 1) * chipGap;
-    let chipY = Math.max(y, H - 90 - totalChipsH);
-    for (const r of rows) {
-      let chipX = bodyX;
-      for (let i = 0; i < r.items.length; i++) {
-        const cw = r.widths[i];
-        drawRoundedRectPath(ctx, chipX, chipY, cw, chipH, chipH / 2);
-        ctx.fillStyle = 'rgba(120, 220, 255, 0.10)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(180, 240, 255, 0.65)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.fillStyle = accent;
-        ctx.textBaseline = 'middle';
-        ctx.fillText(r.items[i], chipX + chipPadX, chipY + chipH / 2 + 1);
-        ctx.textBaseline = 'top';
-        chipX += cw + chipGap;
-      }
-      chipY += chipH + chipGap;
-    }
-  }
+      glow.material.opacity = 0.35 * f * s.fade;
+      emberMat.uniforms['uFade'].value = s.fade;
+    },
+  };
 }
 
+const EMBER_VERT = /* glsl */ `
+attribute vec3 aSeed;
+uniform float uTime;
+uniform float uFade;
+varying float vAlpha;
+void main() {
+  float life = fract(aSeed.x + uTime * 0.3 * (0.6 + aSeed.y));
+  vec3 p = vec3(
+    sin(life * 6.0 + aSeed.z * 6.28) * 0.28 * life,
+    life * 3.2,
+    cos(life * 5.0 + aSeed.y * 6.28) * 0.28 * life);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = clamp((1.0 - life) * 60.0 / max(-mv.z, 0.5), 1.0, 6.0);
+  vAlpha = (1.0 - life) * uFade;
+}`;
 
-function drawRoundedRectPath(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number
-): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y,     x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x,     y + h, r);
-  ctx.arcTo(x,     y + h, x,     y,     r);
-  ctx.arcTo(x,     y,     x + w, y,     r);
-  ctx.closePath();
-}
-
-function drawCornerBrackets(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number,
-  size: number, color: string, lineWidth: number
-): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  // top-left
-  ctx.beginPath();
-  ctx.moveTo(x, y + size); ctx.lineTo(x, y); ctx.lineTo(x + size, y); ctx.stroke();
-  // top-right
-  ctx.beginPath();
-  ctx.moveTo(x + w - size, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + size); ctx.stroke();
-  // bottom-right
-  ctx.beginPath();
-  ctx.moveTo(x + w, y + h - size); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - size, y + h); ctx.stroke();
-  // bottom-left
-  ctx.beginPath();
-  ctx.moveTo(x + size, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - size); ctx.stroke();
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const next = line ? line + ' ' + w : w;
-    if (ctx.measureText(next).width > maxW && line) {
-      lines.push(line);
-      line = w;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
+const EMBER_FRAG = /* glsl */ `
+varying float vAlpha;
+void main() {
+  float d = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.0, d) * vAlpha;
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(1.0, 0.62, 0.3, a);
+}`;
