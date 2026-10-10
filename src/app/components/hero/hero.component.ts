@@ -31,6 +31,24 @@ export class HeroComponent implements OnInit, OnDestroy {
   allProjects: FeaturedProject[] = [
     // Professional Projects
     {
+      title: 'Nexetic - Microsoft 365 Backup & Recovery Platform',
+      description: 'Nexetic Oy is a Finnish SaaS company providing Microsoft 365 backup and recovery solutions. Contributing full-stack features across C#, .NET, Angular, EF Core, Azure Functions and SQL, including security-sensitive Microsoft LAPS backup functionality with <strong>encryption, tenant isolation, audit logging and automated tests</strong>, alongside reporting and migration-verification tooling and OpenAPI/NSwag contract work.',
+      impact: 'Delivered security-sensitive Microsoft LAPS backup functionality with encryption, tenant isolation and audit logging for a production backup SaaS platform',
+      technologies: ['C# / .NET', 'Angular / TypeScript', 'EF Core / SQL', 'Azure Functions', 'OpenAPI / NSwag'],
+      link: 'https://nexetic.com/',
+      image: 'assets/images/projects/Nexetic.png',
+      category: 'SaaS Platform'
+    },
+    {
+      title: 'Spice Döner - Restaurant Website',
+      description: 'A production website for Spice Döner, a kebab restaurant in Helsinki’s Forum shopping centre. Built with Angular 18 and server-side rendering for SEO, with a <strong>spreadsheet-driven menu editable via Google Sheets or an Excel workbook with no redeployment</strong>, direct ordering through Wolt and Uber Eats, bilingual English/Finnish content, GDPR-compliant consent management and PWA support, deployed on Cloudflare Pages.',
+      impact: 'Launched a bilingual, SEO-optimized restaurant site with a no-redeploy spreadsheet-driven menu and direct Wolt/Uber Eats ordering',
+      technologies: ['Angular 18', 'Angular SSR', 'TypeScript', 'PWA', 'i18n (EN/FI)', 'Cloudflare Pages'],
+      link: 'https://spicedoner.fi/',
+      image: 'assets/images/projects/SpiceDoner.png',
+      category: 'Restaurant Website'
+    },
+    {
       title: 'AdvancePro - Inventory Management System',
       description: 'AdvancePro is a Canadian SaaS company providing inventory management solutions integrated with QuickBooks, Shopify, Avalara and other platforms. Enhanced API efficiency by doing a deep performance analysis and moving beyond strict REST conventions to design a lean, dedicated search API that returned only essential data, <strong>reducing response times by 30%</strong>. Integrated payment workflows with Authorize.net, enabling secure online transactions and automated invoice generation for <strong>200+ active business clients</strong>.',
       impact: 'Reduced API response times by 30% and enabled secure transactions for 200+ active business clients',

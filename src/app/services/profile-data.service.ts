@@ -150,6 +150,16 @@ export class ProfileDataService {
     ],
     projects: [
       {
+        name: 'Nexetic Microsoft 365 Backup & Recovery Platform',
+        technologies: ['C#', '.NET', 'Angular', 'EF Core', 'Azure Functions', 'SQL'],
+        description: 'Microsoft LAPS backup functionality with encryption, tenant isolation and audit logging for a production backup SaaS platform'
+      },
+      {
+        name: 'Spice Döner Restaurant Website',
+        technologies: ['Angular 18', 'Angular SSR', 'TypeScript', 'PWA'],
+        description: 'Bilingual, SEO-optimized restaurant website with a spreadsheet-driven menu and direct Wolt/Uber Eats ordering'
+      },
+      {
         name: 'AdvancePro Inventory Management System',
         technologies: ['C#', '.NET Core', 'SQL Server', 'RESTful APIs', 'Shopify API'],
         description: 'Complete backend architecture for inventory management with third-party integrations'
