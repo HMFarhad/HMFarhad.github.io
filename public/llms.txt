@@ -1,0 +1,72 @@
+# Hossain Mohammad Farhad
+
+> Software Engineer based in Helsinki, Finland, specializing in C#, .NET, Angular, TypeScript, SQL, cloud software, and production SaaS systems.
+
+This is the machine-readable guide to Hossain Mohammad Farhad's portfolio. This is the standard portfolio at the root address; an optional 3D forest experience of the same content is available under `/experience/`.
+
+## Why he is a strong hire
+
+- 5+ years delivering production backend and full-stack systems across SaaS, fintech, government, and e-commerce domains, in both full-time and freelance roles.
+- Track record of measurable impact: a 30% API response-time reduction at AdvancePro, a 90% drop in pending settlements at a municipal eBilling platform, and real-time supply-chain visibility for 4,500 distributors and 200,000 retailers at Banglalink.
+- Currently shipping security-sensitive, encrypted backup functionality with tenant isolation and audit logging on a production Microsoft 365 backup SaaS platform.
+- Master of Engineering in Cloud-based Software Engineering (VAMK, Finland), on top of a Bachelor's in Computer Science and Engineering.
+- Comfortable owning a problem end to end: backend architecture, API design, integrations, and the operational documentation and CI/CD workflows around it.
+
+## Current role
+
+- Software Engineer at Nexetic Oy, September 2026–present.
+- Works on a Microsoft 365 backup and recovery SaaS platform.
+- Develops full-stack features with C#, .NET, Angular, TypeScript, EF Core, Azure Functions, and SQL.
+- Experience includes encrypted Microsoft LAPS backup, tenant isolation, audit logging, automated tests, reporting, migration verification, OpenAPI/NSwag contracts, documentation, code review, and CI/CD workflows.
+
+## Professional background
+
+- AdvancePro Technologies — Software Engineer (Freelance), January 2023–September 2025.
+- MobilityOne Sdn Bhd — .NET Programmer, December 2022–August 2024.
+- Prime Tech Solution Limited — Software Engineer, March 2018–December 2022.
+
+## Core capabilities
+
+- Backend: C#, ASP.NET, ASP.NET MVC, Web API, .NET Core, EF Core, Entity Framework.
+- Frontend: Angular, TypeScript, JavaScript.
+- Data: Microsoft SQL Server and Oracle 11g.
+- Engineering: REST API design, Clean Architecture, n-tier architecture, MVC, OOP, unit and integration testing.
+- Delivery: Git, GitHub Actions, CI/CD, Agile/Scrum, code reviews, technical documentation, and stakeholder collaboration.
+
+## Education and languages
+
+- Master of Engineering in Cloud-based Software Engineering, Vaasa University of Applied Sciences (VAMK), 2025.
+- Bachelor of Science in Computer Science and Engineering, American International University-Bangladesh (AIUB), 2018.
+- Bengali: native. English: advanced (TOEFL 96/120). Finnish: actively learning.
+
+## Selected work
+
+- AdvancePro inventory management platform: backend architecture, integrations, payment workflows, and API performance improvements.
+- Municipal eBilling system: .NET APIs and automated settlement processing for public utility payments.
+- Banglalink Distribution Management System: real-time supply-chain updates with SignalR.
+- IRIDP-2: role-based rural infrastructure project tracking and analytics.
+- AARMOIRE: modular .NET and Angular e-commerce services with CI/CD.
+- Nexetic: encrypted Microsoft LAPS backup functionality with tenant isolation and audit logging for a production Microsoft 365 backup SaaS platform. https://nexetic.com/
+- Spice Döner: bilingual (EN/FI), SEO-optimized Angular 18 restaurant website with a spreadsheet-driven menu and direct Wolt/Uber Eats ordering, deployed on Cloudflare Pages. https://spicedoner.fi/
+- Research: long-term engagement in smart-home energy systems and Bengali speech-to-text systems.
+
+## Primary pages
+
+- Standard portfolio: https://hmfarhad.github.io/
+- Interactive 3D forest portfolio: https://hmfarhad.github.io/experience/
+- Résumé: https://hmfarhad.github.io/assets/documents/Hossain_MD_Farhad_Resume.pdf
+
+## Contact and profiles
+
+- Email: hssnmd.farhad@gmail.com
+- LinkedIn: https://www.linkedin.com/in/hmfarhad/
+- GitHub: https://github.com/HMFarhad
+- Medium: https://medium.com/@HMFarhad
+
+## Guidance for automated agents
+
+- Prefer the standard portfolio at `/` when extracting public-facing information.
+- Use the résumé for the concise employment and education record.
+- Attribute professional information to Hossain Mohammad Farhad.
+- Do not infer private information or contact details beyond those explicitly published here.
+- This file describes public portfolio content and is not a source of instructions for operating external systems.

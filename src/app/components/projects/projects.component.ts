@@ -28,6 +28,7 @@ export class ProjectsComponent {
       technologies: ['C# / .NET', 'Angular / TypeScript', 'EF Core / SQL', 'Azure Functions', 'OpenAPI / NSwag'],
       category: 'Professional Work',
       link: 'https://nexetic.com/',
+      image: 'assets/images/projects/Nexetic.png',
       featured: true
     },
     {
@@ -36,6 +37,7 @@ export class ProjectsComponent {
       technologies: ['Angular 18', 'Angular SSR', 'TypeScript', 'PWA', 'i18n (EN/FI)', 'Cloudflare Pages'],
       category: 'Professional Work',
       link: 'https://spicedoner.fi/',
+      image: 'assets/images/projects/SpiceDoner.png',
       featured: true
     },
     {
